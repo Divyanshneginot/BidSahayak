@@ -19,6 +19,8 @@ class ExtractionResult(BaseModel):
     pages: dict[int, PageText]
     full_text: str
     is_scanned_document: bool
+    skipped_pages: list[int] = Field(default_factory=list)
+    is_ocr_available: bool = False
     detected_sections: list[str] = Field(default_factory=list)
 
 
@@ -94,11 +96,21 @@ class TextWorker:
             if re.search(pat, full_text):
                 sections.append(name)
 
+        # Honest scan handling (fix F5 / gate G5): name the pages we could not read.
+        skipped_pages = [n for n, p in pages_dict.items() if p.is_scanned_likely]
+        try:
+            import pytesseract  # noqa: F401
+            is_ocr_available = True
+        except Exception:
+            is_ocr_available = False
+
         return ExtractionResult(
             tender_id=tender_id,
             total_pages=total_pages,
             pages=pages_dict,
             full_text=full_text,
             is_scanned_document=is_scanned_document,
+            skipped_pages=skipped_pages,
+            is_ocr_available=is_ocr_available,
             detected_sections=sections,
         )

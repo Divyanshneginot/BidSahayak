@@ -1,114 +1,362 @@
 {
-  "imd-tender.pdf": {
-    "emd_amount": 10000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2019-06-24",
-    "min_turnover": null,
-    "is_real": true,
-    "tender_ref": "NIT CPU/52/0519/9913"
+ "schema_version": "1.0",
+ "purpose": "Per-field ground truth for the reproducibility benchmark. Read from the source documents, never from the pipeline under test.",
+ "read_rules": [
+  "A field the document does not state is null. Never substitute an expected/typical value.",
+  "Money in INR as an integer. 'Rs. 10,000.00' -> 10000. 'Rs 5 lakh' -> 500000. 'Rs 1.5 crore' -> 15000000.",
+  "Deadline is the BID SUBMISSION CLOSING date, not publication, not opening, not bid validity.",
+  "If the document contradicts tender_measurement.csv, the document wins and the CSV row is a bug to fix."
+ ],
+ "known_csv_bugs": [
+  {
+   "row": 1,
+   "field": "deadline_date",
+   "csv_value": "2019-07-01",
+   "truth": "2019-06-24",
+   "why": "PDF page 1 closing date is 24.06.2019."
   },
-  "mtd_goods_nic.pdf": {
-    "emd_amount": 100000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-24",
-    "min_turnover": 2500000,
-    "is_real": false,
-    "tender_ref": "MTD Goods NIC V01"
+  {
+   "row": 5,
+   "field": "deadline_date",
+   "csv_value": "2026-10-25",
+   "truth": null,
+   "why": "BCCL fixture states no submission date anywhere; the value was invented."
   },
-  "up_pwd_road_works.pdf": {
-    "emd_amount": 150000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-18",
-    "min_turnover": 4500000,
-    "is_real": false,
-    "tender_ref": "NIT 142/EE/PWD/2026"
+  {
+   "row": "all",
+   "field": "source_url",
+   "csv_value": "live eprocure.gov.in / state portal URLs",
+   "truth": "synthetic fixtures",
+   "why": "13/14 fixtures were generated locally (ReportLab, 2026-10-04 10:32 IST); they were not downloaded from those URLs."
   },
-  "karnataka_jjm_water.pdf": {
-    "emd_amount": 200000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-15",
-    "min_turnover": 6000000,
-    "is_real": false,
-    "tender_ref": "JJM/RDWSD/2026/089"
+  {
+   "row": 7,
+   "field": "emd_amount_inr",
+   "csv_value": "40000",
+   "truth": "ambiguous (40,00,000 and 40,000 both appear)",
+   "why": "Fixture is internally contradictory by design; the honest output is human review, not a number."
   },
-  "bccl_coal_handling.pdf": {
-    "emd_amount": 500000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": null,
-    "min_turnover": 10000000,
-    "is_real": false,
-    "tender_ref": "BCCL/CMC/2026/04"
+  {
+   "row": 14,
+   "field": "min_annual_turnover_inr",
+   "csv_value": "1000000",
+   "truth": null,
+   "why": "The TN fixture has no turnover clause in its generator spec or its text layer; the value was invented."
   },
-  "upneda_solar_lights.pdf": {
-    "emd_amount": 80000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-22",
-    "min_turnover": 2000000,
-    "is_real": false,
-    "tender_ref": "02/UPNEDA/SOLAR/2026"
-  },
-  "aiims_ppe_supply.pdf": {
-    "emd_amount": 40000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-19",
-    "min_turnover": 1500000,
-    "is_real": false,
-    "tender_ref": "AIIMS/HOSP/PPE/2026/11"
-  },
-  "smart_classroom_displays.pdf": {
-    "emd_amount": 120000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-28",
-    "min_turnover": 5000000,
-    "is_real": false,
-    "tender_ref": "SEIDC/EQUIP/2026/07"
-  },
-  "cpwd_facility_management.pdf": {
-    "emd_amount": 60000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-25",
-    "min_turnover": 3000000,
-    "is_real": false,
-    "tender_ref": "CPWD/NR/FAC/2026/19"
-  },
-  "nicsi_cloud_maintenance.pdf": {
-    "emd_amount": 100000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-30",
-    "min_turnover": 4000000,
-    "is_real": false,
-    "tender_ref": "NICSI/DATA-CTR/2026/41"
-  },
-  "up_jal_nigam_hindi.pdf": {
-    "emd_amount": 50000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-21",
-    "min_turnover": 2500000,
-    "is_real": false,
-    "tender_ref": "18/JAL-NIGAM/2026"
-  },
-  "scanned_police_housing.pdf": {
-    "emd_amount": 75000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-16",
-    "min_turnover": 3500000,
-    "is_real": false,
-    "tender_ref": "PHC/BARRACKS/2026/54"
-  },
-  "nhai_highway_toll.pdf": {
-    "emd_amount": 1000000,
-    "emd_exempt_for_mse": false,
-    "deadline_date": "2026-11-02",
-    "min_turnover": 20000000,
-    "is_real": false,
-    "tender_ref": "NHAI/TOLL/NH24/2026"
-  },
-  "tn_highways_short_deadline.pdf": {
-    "emd_amount": 30000,
-    "emd_exempt_for_mse": true,
-    "deadline_date": "2026-10-09",
-    "min_turnover": 1000000,
-    "is_real": false,
-    "tender_ref": "TN-HW/RESTORE/2026/09"
+  {
+   "row": "fixture",
+   "field": "source_text",
+   "csv_value": "n/a",
+   "truth": "up_jal_nigam_hindi.pdf was regenerated 2026-10-04 with an embedded Noto Sans Devanagari font",
+   "why": "The original fixture's Hindi text layer was tofu boxes (reportlab default font has no Devanagari glyphs), so it could not test the Hindi path. Same content, same 14 pages, real glyphs. See scripts/regenerate_hindi_fixture.py."
   }
+ ],
+ "metrics_required": [
+  "emd_amount_inr",
+  "deadline_date",
+  "min_annual_turnover_inr",
+  "emd_exempted_for_mse"
+ ],
+ "tenders": [
+  {
+   "n": 1,
+   "file": "imd-tender.pdf",
+   "ref": "Tend No./20190607",
+   "department": "India Meteorological Department",
+   "portal": "dept-site",
+   "sector": "services",
+   "synthetic": false,
+   "emd_amount_inr": 10000,
+   "deadline_date": "2019-06-24",
+   "min_annual_turnover_inr": null,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [],
+   "csv_correction": "CSV said 2019-07-01; PDF page 1 says 'Closing date and time for submission of tender 24.06.2019 / 1500 Hrs'."
+  },
+  {
+   "n": 2,
+   "file": "mtd_goods_nic.pdf",
+   "ref": "MTD Goods NIC V01",
+   "department": "Dept of Expenditure / Ministry of Finance",
+   "portal": "eprocure.gov.in",
+   "sector": "goods",
+   "synthetic": true,
+   "emd_amount_inr": 100000,
+   "deadline_date": "2026-10-24",
+   "min_annual_turnover_inr": 2500000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [],
+   "csv_correction": null
+  },
+  {
+   "n": 3,
+   "file": "up_pwd_road_works.pdf",
+   "ref": "NIT 142/EE/PWD/2026",
+   "department": "Public Works Department",
+   "portal": "upetender.gov.in",
+   "sector": "works",
+   "synthetic": true,
+   "emd_amount_inr": 150000,
+   "deadline_date": "2026-10-18",
+   "min_annual_turnover_inr": 4500000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [
+    "Class-1 Civil"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 4,
+   "file": "karnataka_jjm_water.pdf",
+   "ref": "JJM/RDWSD/2026/089",
+   "department": "Rural Drinking Water and Sanitation Department",
+   "portal": "kpp.karnataka.gov.in",
+   "sector": "works",
+   "synthetic": true,
+   "emd_amount_inr": 200000,
+   "deadline_date": "2026-10-15",
+   "min_annual_turnover_inr": 6000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [
+    "Class-1 Contractor"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 5,
+   "file": "bccl_coal_handling.pdf",
+   "ref": "BCCL/CMC/2026/04",
+   "department": "Bharat Coking Coal Limited",
+   "portal": "coalindiatenders.nic.in",
+   "sector": "works",
+   "synthetic": true,
+   "emd_amount_inr": 500000,
+   "deadline_date": null,
+   "min_annual_turnover_inr": 10000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 5,
+   "certifications": [
+    "ISO 9001"
+   ],
+   "csv_correction": "CSV said 2026-10-25; the BCCL fixture contains NO submission date at all (no date token exists in the document). Value removed rather than invented."
+  },
+  {
+   "n": 6,
+   "file": "upneda_solar_lights.pdf",
+   "ref": "02/UPNEDA/SOLAR/2026",
+   "department": "UPNEDA",
+   "portal": "upetender.gov.in",
+   "sector": "supply",
+   "synthetic": true,
+   "emd_amount_inr": 80000,
+   "deadline_date": "2026-10-22",
+   "min_annual_turnover_inr": 2000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 2,
+   "certifications": [
+    "MNRE",
+    "ISO 9001"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 7,
+   "file": "aiims_ppe_supply.pdf",
+   "ref": "AIIMS/HOSP/PPE/2026/11",
+   "department": "AIIMS New Delhi",
+   "portal": "eprocure.gov.in",
+   "sector": "supply",
+   "synthetic": true,
+   "emd_amount_inr": 40000,
+   "deadline_date": "2026-10-19",
+   "min_annual_turnover_inr": 1500000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 2,
+   "certifications": [
+    "ISO 13485",
+    "CE",
+    "BIS"
+   ],
+   "csv_correction": null,
+   "ambiguous_fields": [
+    "emd_amount_inr"
+   ],
+   "ambiguity_note": "The fixture contains both 'EMD: Rs. 40,00,000' and 'Fixed EMD: Rs. 40,000'. Correct behaviour is to surface both candidates with their snippets and route the field to human review (adversarial case A7). Excluded from the accuracy denominator until F2/F3 land."
+  },
+  {
+   "n": 8,
+   "file": "smart_classroom_displays.pdf",
+   "ref": "SEIDC/EQUIP/2026/07",
+   "department": "State Education Infrastructure Dev Corp",
+   "portal": "eprocure.gov.in",
+   "sector": "supply",
+   "synthetic": true,
+   "emd_amount_inr": 120000,
+   "deadline_date": "2026-10-28",
+   "min_annual_turnover_inr": 5000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [
+    "OEM Authorization",
+    "ISO 9001"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 9,
+   "file": "cpwd_facility_management.pdf",
+   "ref": "CPWD/NR/FAC/2026/19",
+   "department": "Central Public Works Department",
+   "portal": "eprocure.gov.in",
+   "sector": "services",
+   "synthetic": true,
+   "emd_amount_inr": 60000,
+   "deadline_date": "2026-10-25",
+   "min_annual_turnover_inr": 3000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [
+    "ISO 9001"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 10,
+   "file": "nicsi_cloud_maintenance.pdf",
+   "ref": "NICSI/DATA-CTR/2026/41",
+   "department": "NICSI / MeitY",
+   "portal": "eprocure.gov.in",
+   "sector": "services",
+   "synthetic": true,
+   "emd_amount_inr": 100000,
+   "deadline_date": "2026-10-30",
+   "min_annual_turnover_inr": 4000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [
+    "ISO 27001",
+    "ISO 9001"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 11,
+   "file": "up_jal_nigam_hindi.pdf",
+   "ref": "18/JAL-NIGAM/2026",
+   "department": "UP Jal Nigam (Rural)",
+   "portal": "upetender.gov.in",
+   "sector": "works",
+   "synthetic": true,
+   "emd_amount_inr": 50000,
+   "deadline_date": "2026-10-21",
+   "min_annual_turnover_inr": 2500000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 3,
+   "certifications": [
+    "श्रेणी ख पंजीकरण"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 12,
+   "file": "scanned_police_housing.pdf",
+   "ref": "PHC/BARRACKS/2026/54",
+   "department": "State Police Housing Corporation",
+   "portal": "state-police.gov.in",
+   "sector": "works",
+   "synthetic": true,
+   "emd_amount_inr": 75000,
+   "deadline_date": "2026-10-16",
+   "min_annual_turnover_inr": 3500000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": false,
+   "min_years_experience": 3,
+   "certifications": [
+    "Class-2 Civil"
+   ],
+   "csv_correction": null
+  },
+  {
+   "n": 13,
+   "file": "nhai_highway_toll.pdf",
+   "ref": "NHAI/TOLL/NH24/2026",
+   "department": "National Highways Authority of India",
+   "portal": "eprocure.gov.in",
+   "sector": "services",
+   "synthetic": true,
+   "emd_amount_inr": 1000000,
+   "deadline_date": "2026-11-02",
+   "min_annual_turnover_inr": 20000000,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": false,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 5,
+   "certifications": [],
+   "csv_correction": null
+  },
+  {
+   "n": 14,
+   "file": "tn_highways_short_deadline.pdf",
+   "ref": "TN-HW/RESTORE/2026/09",
+   "department": "Highways Department",
+   "portal": "tntenders.gov.in",
+   "sector": "works",
+   "synthetic": true,
+   "emd_amount_inr": 30000,
+   "deadline_date": "2026-10-09",
+   "min_annual_turnover_inr": null,
+   "turnover_window_years": 3,
+   "emd_exempted_for_mse": true,
+   "requires_class3_dsc": true,
+   "text_layer_present": true,
+   "min_years_experience": 2,
+   "certifications": [
+    "Class-3 Civil"
+   ],
+   "csv_correction": "CSV claimed min_annual_turnover_inr=1000000. The document contains no turnover clause at all - scripts/generate_sample_tenders.py never wrote one and the extracted text has no 'turnover' token. Ground truth corrected to null rather than allowing the harness to demand a value that does not exist."
+  }
+ ],
+ "fields_excluded_from_accuracy": [
+  "aiims_ppe_supply.pdf:emd_amount_inr"
+ ]
 }

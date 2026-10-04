@@ -1,4 +1,5 @@
-from datetime import datetime, timezone, timedelta, date
+from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 from typing import Optional
 from src.models import (
     RequirementMatrix,
@@ -7,7 +8,7 @@ from src.models import (
     BidVerdict,
 )
 
-IST = timezone(timedelta(hours=5, minutes=30))
+IST = ZoneInfo("Asia/Kolkata")
 
 
 def calculate_effective_turnover(turnovers: list[int]) -> int:
@@ -47,7 +48,7 @@ def evaluate(
     - Class 3 DSC timing constraint
     - Confidence gating
     """
-    now = current_time or datetime.now(timezone.utc)
+    now = current_time or datetime.now(IST)
     verdicts: list[RequirementVerdict] = []
     gaps: list[RequirementVerdict] = []
     low_confidence_fields: list[str] = []

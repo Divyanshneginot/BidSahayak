@@ -165,15 +165,15 @@ class ExtractorAgent:
                 )
             else:
                 # Round-trip value verification: code may only lower confidence, never raise it
-                val_ok, val_conf = SnippetVerifier.verify_value(
-                    evidence.value_normalised or evidence.value_raw,
-                    evidence.source_snippet
+                val_res = SnippetVerifier.verify_value(
+                    evidence.source_snippet,
+                    evidence.value_normalised if evidence.value_normalised is not None else evidence.value_raw,
                 )
-                if not val_ok:
-                    evidence.confidence = min(evidence.confidence, val_conf)
+                if not val_res.is_verified:
+                    evidence.confidence = min(evidence.confidence, 0.30)
                     evidence.ambiguity = (
-                        f"Value round-trip verification failed: Extracted value does not match "
-                        f"cited snippet text on Page {evidence.source_page}."
+                        f"Value round-trip verification failed on Page {evidence.source_page}: "
+                        f"{val_res.reason}"
                     )
 
         return matrix

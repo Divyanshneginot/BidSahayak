@@ -66,22 +66,34 @@ pytest tests/ -v
 
 > *Will be added at deployment (hour 20–24)*
 
-## Benchmark Results (14-Tender Suite)
-Generated directly via `python scripts/benchmark.py --repo . --no-llm --md docs/BENCHMARK.md`:
+## Benchmark Results (14-document suite)
 
-- **Suite**: 1 real seed tender (`imd-tender.pdf`, NIT CPU/52/0519/9913) + 13 synthetic fixtures derived from GFR 2017 & state templates.
-- **Deterministic Tier Performance**:
-  - EMD Recovery: **13 / 14 (92.9%)**
-  - Deadline Accuracy: **12 / 14 (85.7%)**
-  - Exemption Detection: **9 / 14 (64.3%)**
-  - Latency: **p50 = 43.9 ms · p95 = 733.5 ms**
-  - **IMD Real Seed Tender**: **100% match** (EMD: ₹10,000, Deadline: 2019-06-24, Turnover: ₹20,00,000, Micro Exemption: Verified)
+Regenerate with `python scripts/benchmark.py --repo . --no-llm --md docs/BENCHMARK.md`.
+Ground truth lives in `assets/ground_truth.json` and is read from the documents, never from the pipeline.
+
+| Field | Correct | Of | Accuracy | Threshold |
+|---|---|---|---|---|
+| EMD amount | 13 | 13 | **100%** | ≥ 90% |
+| Submission deadline | 13 | 14 | **93%** | ≥ 80% |
+| Minimum turnover | 14 | 14 | **100%** | ≥ 70% |
+| MSE exemption stated | 14 | 14 | **100%** | ≥ 90% |
+
+*Latency:* p50 33 ms · p95 85 ms (deterministic tier, single machine, no API key).
+One document's EMD is excluded from the denominator: `aiims_ppe_supply.pdf` states **two** competing
+figures (₹40,00,000 and ₹40,000), so the correct output there is human review, not a number.
+
+**Tier note.** These figures are the **deterministic tier** (no LLM). The LLM tier was not run in this
+environment because no API key was configured; when a key is present, run `python scripts/benchmark.py --repo .`
+and it reports the provider, the resolved model, and — per document — which tier actually answered
+(`last_tier`) plus any `fallback_reason`. A run in which any document reports `tier=3` is a fallback run and
+must not be published as an LLM result.
 
 ### Known Failure Modes & Limitations
-1. **Scanned / Raster Documents**: Documents lacking a machine-readable text layer (`scanned_police_housing.pdf`) are flagged as unreadable pages and routed to human review rather than guessing.
-2. **Unstated Deadlines**: PSU documents that do not state a concrete bid submission date (`bccl_coal_handling.pdf`) correctly yield `None` rather than a hallucinated date.
-3. **Complex Multi-Year Turnover Clauses**: Complex turnover clauses requiring financial statement reconciliation require human confirmation.
-4. **Deterministic Resilience**: The app works out of the box with zero external LLM API keys via the deterministic fallback engine.
+1. **Unreadable text layers.** A page whose text layer is tofu/near-empty is reported in `skipped_pages`, excluded from analysis, and surfaced in the UI — never guessed at.
+2. **Unstated values.** Where a document states no deadline (`bccl_coal_handling.pdf`) the field is `None` and the field is listed in `unresolved_fields`, routing the verdict to human review instead of inventing a date. Where no turnover clause exists (`tn_highways_short_deadline.pdf`) the value is `None` — a value the earlier CSV asserted but the document does not contain.
+3. **Contradictory clauses.** Two competing figures for one field (AIIMS EMD) force human review rather than a confident pick.
+4. **Word-unit turnover only in English/Hindi.** "20 crore" and "₹20,00,00,000" are handled; other regional numeral scripts are not.
+5. **No OCR.** Image-only pages are skipped rather than transcribed; `is_ocr_available` reports this in the API response.
 
 ## Honest Limits
 

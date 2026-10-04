@@ -1402,7 +1402,7 @@ never do</h2>
     var kicker=$("[data-i18n='res.kicker']");
     if(data.verdict && data.verdict.overall){
       var biz = (data.profile && data.profile.business_name) || getVendorProfile().business_name || "Sahayak Tech Solutions";
-      if(kicker) kicker.textContent="Verdict · "+(data.tender_id||"UPLOADED TENDER")+" · "+biz;
+      if(kicker) kicker.textContent="Verdict · "+(data.tender_id||(data.matrix&&data.matrix.tender_id)||"this tender")+" · "+biz;
     } else {
       if(kicker) kicker.textContent="Extraction only — add your profile";
     }
@@ -1565,7 +1565,9 @@ never do</h2>
           }
           clearTimeout(to);
           dz.removeAttribute("aria-busy");
-          if(hintEl)hintEl.textContent=dict[cur]["dz.success"]||"Assessment complete ✓ (Live tender data loaded)";
+          if(hintEl){hintEl.textContent=dict[cur]["dz.success"]||"Assessment complete ✓";
+          var sk=(data.skipped_pages||[]).length;
+          if(sk>0)hintEl.textContent+=" — "+sk+" page(s) had no readable text layer, excluded from analysis.";}
           renderLiveAssessment(currentSession);
           var r=$("#result");
           if(r)r.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});

@@ -30,6 +30,8 @@ class AssessmentSession(BaseModel):
     matrix: Optional[RequirementMatrix] = None
     profile: Optional[VendorProfile] = None
     verdict: Optional[BidVerdict] = None
+    skipped_pages: list[int] = Field(default_factory=list)
+    is_ocr_available: bool = False
     trace: list[TraceEntry] = Field(default_factory=list)
 
 
@@ -88,6 +90,7 @@ class Supervisor:
             tier_reached=1,
             details={
                 "is_scanned": text_res.is_scanned_document,
+                "skipped_pages": text_res.skipped_pages,
                 "sections": text_res.detected_sections,
                 "total_chars": len(text_res.full_text),
             },
@@ -103,8 +106,10 @@ class Supervisor:
             started_at=t0,
             duration_ms=round(d_ms, 2),
             status="SUCCESS",
-            tier_reached=3 if not self.extractor_agent.api_key else 1,
+            tier_reached=getattr(self.extractor_agent, "last_tier", 3),
             details={
+                "tier": getattr(self.extractor_agent, "last_tier", 3),
+                "fallback_reason": getattr(self.extractor_agent, "fallback_reason", None),
                 "fields_extracted": len(matrix.evidence_fields),
                 "emd": matrix.emd_amount,
                 "turnover": matrix.min_turnover,
@@ -137,5 +142,7 @@ class Supervisor:
             matrix=matrix,
             profile=profile,
             verdict=verdict,
+            skipped_pages=text_res.skipped_pages,
+            is_ocr_available=text_res.is_ocr_available,
             trace=trace,
         )

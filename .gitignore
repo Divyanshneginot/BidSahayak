@@ -48,3 +48,6 @@ uploads/
 *.bak
 *.bak*
 shots/
+
+# Font used only to regenerate the Hindi fixture (downloaded by the script)
+.fonts/

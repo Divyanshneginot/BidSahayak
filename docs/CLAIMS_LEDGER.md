@@ -6,9 +6,9 @@ Every public claim in this repository is tracked here with its audit status, evi
 |---|---|---|---|---|---|
 | CLM-01 | "14 live tender documents analyzed" | Stated all 14 were live downloads from 4 Oct 2026 | Clarified | 1 real seed public tender (`imd-tender.pdf`) + 13 synthetic fixtures. Detailed in `sample_tenders/NOTICE.md`. | VERIFIED |
 | CLM-02 | "Mean 34.2 pages, 11.4 days, 5.8 pages separation" | Stated as broad statistical sample mean | Deleted | Removed from `PROBLEM_EVIDENCE.md` §4; replaced with qualitative structural patterns. | VERIFIED |
-| CLM-03 | "14/14 (100%) extraction accuracy across all fields" | Claimed 100% on all fields | Softened & Measured | Replaced with reproducible benchmark in `docs/BENCHMARK.md` (EMD: 85.7%, Exemption: 92.9%). | VERIFIED |
+| CLM-03 | "14/14 (100%) extraction accuracy across all fields" | Claimed 100% on all fields | Softened & Measured | Replaced with reproducible benchmark in `docs/BENCHMARK.md` (EMD 100% (13/13), deadline 93% (13/14), turnover 100% (14/14), exemption 100% (14/14)). | VERIFIED |
 | CLM-04 | "Zero Confident Hallucinations / 0 Confident Errors" | Theoretical claim | Softened | Replaced with explicit human-review routing on unverified/low-confidence snippets. | VERIFIED |
-| CLM-05 | "OCR fallback for raster images" | Listed in architecture table | Corrected | Removed OCR claim; unreadable/raster pages are honestly flagged as `skipped_pages` and routed to human review. | VERIFIED |
+| CLM-05 | "OCR fallback for raster images" | Listed in architecture table | Corrected | OCR claim removed; `skipped_pages` is now **implemented** (`ExtractionResult.skipped_pages`, returned by `/api/assess/process`, surfaced in the UI) and `is_ocr_available` reports whether an OCR backend exists. | VERIFIED (implemented) |
 | CLM-06 | "CAG UP 73% single-bidding statistic" | Sourced to CAG Report No. 4 of 2017 | Preserved | Verifiable in CAG UP Report No. 4 of 2017 cited in `PROBLEM_EVIDENCE.md` §1. | VERIFIED |
 | CLM-07 | "CAG TN 62.39% single-bidding statistic" | Sourced to CAG Report No. 4 of 2023 | Preserved | Verifiable in CAG TN eProcurement Report cited in `PROBLEM_EVIDENCE.md` §1. | VERIFIED |
 | CLM-08 | "CAG JJM 24.4% single-tender approvals" | Sourced to CAG Karnataka Report April 2026 | Preserved | Verifiable in published CAG JJM report cited in `PROBLEM_EVIDENCE.md` §1. | VERIFIED |

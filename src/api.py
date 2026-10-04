@@ -131,6 +131,8 @@ async def upload_tender_pdf(file: UploadFile = File(...)):
             "page_count": ingest_result.page_count,
             "sha256": ingest_result.sha256_hash,
             "is_scanned": extraction.is_scanned_document,
+        "skipped_pages": extraction.skipped_pages,
+        "is_ocr_available": extraction.is_ocr_available,
             "detected_sections": extraction.detected_sections,
             "pages_summary": [
                 {"page": p_num, "chars": p_data.char_count, "is_scanned": p_data.is_scanned_likely}

@@ -1,7 +1,7 @@
 # PROBLEM_EVIDENCE.md — Empirical Problem Evidence & Audit Dossier
 
 > **Artefact for Track 01 (Agentic AI) — User Insight & Problem Evidence (15 pts) & Responsible Design (10 pts)**
-> Every number here derives directly from published Comptroller and Auditor General of India (CAG) audits, Union Budget 2026–27 policy directives, official GeM platform analytics, peer-reviewed procurement datasets, or the empirical 14-tender test suite. All citations verifiable against public records.
+> Every number here is either a citable public source with a report reference, or a value regenerate from this repository by a command in the README.
 
 ---
 
@@ -12,7 +12,7 @@ We conducted no informal user interviews inside the 30-hour event window, and st
 1. **Current Policy & Platform Baseline (2026)**: Union Budget 2026–27 MSME declarations, Ministry of Corporate Affairs scheme guidelines, and 10-year official GeM transaction data (August 2026).
 2. **Official Audit Evidence**: Comptroller and Auditor General of India (CAG) performance and information systems audits covering Uttar Pradesh, Karnataka, Tamil Nadu, Haryana, Himachal Pradesh, and central PSUs.
 3. **Peer-Reviewed Procurement Research**: Empirical datasets from The Leap Journal (1,000 CPPP tenders), IJARIIT, European Court of Auditors, and the Open Contracting Partnership.
-4. **Empirical Tender Measurement**: Hand-measured analysis of 14 live tender documents downloaded on 4 October 2026 from CPPP and GeM across works, goods, and services.
+4. **Empirical Tender Measurement**: Hand-read ground truth for a 14-document regression suite — **1 real public tender** (IMD NIT CPU/52/0519/9913) plus **13 synthetic fixtures** modelled on CPPP/GeM document structure across works, goods, services, Hindi notices and a low-text-layer scan. Provenance is stated in `sample_tenders/NOTICE.md`; per-field values live in `assets/ground_truth.json` and are measured by `python scripts/benchmark.py`.
 
 ---
 

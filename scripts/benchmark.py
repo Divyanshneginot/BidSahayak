@@ -1,181 +1,231 @@
 #!/usr/bin/env python3
 """
-BidSahayak Extraction Benchmark Suite.
-Measures field-by-field accuracy (EMD, deadline, turnover, exemption)
-and latency (p50, p95) across all 14 tender documents against ground truth.
+BidSahayak reproducible extraction benchmark.
+
+Replaces evals/run_evals.py, which printed hardcoded success and never compared anything.
+
+It reads ground truth from assets/ground_truth.json (values read from the documents by hand),
+runs the real pipeline over sample_tenders/*.pdf, and reports per-field accuracy plus every miss.
+
+Usage
+-----
+  python scripts/benchmark.py --repo . --no-llm            # deterministic tier only (offline, free)
+  python scripts/benchmark.py --repo .                     # adds the LLM tier if a key is configured
+  python scripts/benchmark.py --repo . --json docs/BENCHMARK.json --md docs/BENCHMARK.md
+
+Exit code: 0 if all field accuracies meet the thresholds below, 1 otherwise.
+Ground truth is never derived from the pipeline under test.
 """
-import os
-import sys
-import json
-import time
+from __future__ import annotations
+
 import argparse
-from typing import Dict, Any, List
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+THRESHOLDS = {"emd": 0.90, "deadline": 0.80, "turnover": 0.70, "exemption": 0.90}
+ESCAPE = "\033[0m"
+OK, BAD, DIM = "\033[32m", "\033[31m", "\033[2m"
 
-from src.ingest import IngestWorker
-from src.text_extract import TextWorker
-from src.agent.extractor import ExtractorAgent
-from src.evaluator import evaluate
-from src.models import VendorProfile
+HERE = Path(__file__).resolve().parent
 
 
-def run_benchmark(repo_root: str, no_llm: bool = False, md_path: str = None):
-    print("=" * 70)
-    tier_label = "Tier 3 (Deterministic Regex Fallback)" if no_llm else "Tier 1/2 (Agentic LLM Extraction)"
-    print(f"BidSahayak Benchmark — {tier_label}")
-    print("=" * 70)
+def find_gt(repo: Path, given: str | None) -> Path | None:
+    cands = []
+    if given:
+        cands.append(Path(given))
+    cands += [repo / "assets/ground_truth.json", repo / "scripts/assets/ground_truth.json",
+              HERE / "../assets/ground_truth.json", HERE / "assets/ground_truth.json"]
+    for c in cands:
+        if c and Path(c).is_file():
+            return Path(c).resolve()
+    return None
 
-    gt_path = os.path.join(repo_root, "assets", "ground_truth.json")
-    if not os.path.exists(gt_path):
-        print(f"[ERROR] Ground truth not found at {gt_path}")
-        return False
 
-    with open(gt_path, "r", encoding="utf-8") as f:
-        ground_truth: Dict[str, Any] = json.load(f)
+def field_results(matrix, gt: dict) -> dict:
+    """Compare an extracted matrix against ground truth. Fields listed in gt['ambiguous_fields']
+    (documents that legitimately contain two competing values) are excluded from the tally and
+    reported as 'AMB' — the correct system behaviour there is human review, not a guess."""
+    """Compare one extracted RequirementMatrix against one ground-truth row."""
+    exp_emd = gt.get("emd_amount_inr")
+    got_emd = getattr(matrix, "emd_amount", None)
+    emd_ok = (got_emd == exp_emd) if exp_emd is not None else (got_emd in (None, 0))
 
-    sample_dir = os.path.join(repo_root, "sample_tenders")
-    if not os.path.exists(sample_dir):
-        print(f"[ERROR] sample_tenders/ not found at {sample_dir}")
-        return False
+    exp_dl = gt.get("deadline_date")
+    got_dl = getattr(matrix, "submission_deadline", None)
+    got_dl_d = got_dl.date().isoformat() if hasattr(got_dl, "date") else None
+    dl_ok = (got_dl_d == exp_dl) if exp_dl else (got_dl is None)
 
-    files = sorted([f for f in os.listdir(sample_dir) if f.endswith(".pdf")])
-    if not files:
-        print("[ERROR] No PDF files in sample_tenders/")
-        return False
+    exp_tv = gt.get("min_annual_turnover_inr")
+    got_tv = getattr(matrix, "min_turnover", None)
+    tv_ok = (got_tv == exp_tv) if exp_tv is not None else (got_tv in (None, 0))
 
-    ingest_worker = IngestWorker()
-    text_worker = TextWorker()
-    
-    # Configure extractor
-    if no_llm:
-        extractor = ExtractorAgent(api_key="none-deterministic")
-        extractor.api_key = None
-    else:
-        extractor = ExtractorAgent()
+    exp_ex = gt.get("emd_exempted_for_mse")
+    cats = [c.lower() for c in (getattr(matrix, "emd_exempt_categories", None) or [])]
+    got_ex = ("micro" in cats or "small" in cats) if exp_ex is not None else None
+    ex_ok = (got_ex == bool(exp_ex)) if exp_ex is not None else True
 
-    test_profile = VendorProfile(
-        business_name="Test Enterprise",
-        udyam_classification="Micro",
-        is_manufacturing=True,
-        is_trading=False,
-        annual_turnover_last_3y=[2000000],
-        holds_class3_dsc=True,
-    )
+    out = {
+        "emd": (emd_ok, got_emd, exp_emd),
+        "deadline": (dl_ok, got_dl_d, exp_dl),
+        "turnover": (tv_ok, got_tv, exp_tv),
+        "exemption": (ex_ok, got_ex, bool(exp_ex) if exp_ex is not None else None),
+    }
+    for f in gt.get("ambiguous_fields", []):
+        key = {"emd_amount_inr": "emd", "deadline_date": "deadline",
+               "min_annual_turnover_inr": "turnover", "emd_exempted_for_mse": "exemption"}.get(f)
+        if key:
+            out[key] = ("ambiguous", out[key][1], f"AMBIGUOUS — {gt.get('ambiguity_note', '')[:60]}")
+    return out
 
-    results = []
-    latencies = []
-    emd_matches = 0
-    deadline_matches = 0
-    turnover_matches = 0
-    exemption_matches = 0
 
-    for pdf_name in files:
-        pdf_path = os.path.join(sample_dir, pdf_name)
-        gt = ground_truth.get(pdf_name, {})
+def run(repo: Path, use_llm: bool, only: str | None) -> dict:
+    sys.path.insert(0, str(repo))
+    from src.ingest import IngestWorker            # noqa: E402
+    from src.text_extract import TextWorker        # noqa: E402
+    from src.agent.extractor import ExtractorAgent  # noqa: E402
 
-        t0 = time.time()
-        ingest_res = ingest_worker.process(pdf_path)
-        if not ingest_res.is_valid:
-            latencies.append(time.time() - t0)
-            results.append({
-                "doc": pdf_name,
-                "status": "INVALID",
-                "emd_match": False,
-                "deadline_match": False,
-                "turnover_match": False,
-                "exempt_match": False,
-                "time_sec": latencies[-1]
-            })
+    gt_path = find_gt(repo, only)
+    if not gt_path:
+        print("ground_truth.json not found — pass --gt <path>", file=sys.stderr)
+        sys.exit(2)
+    gt = json.loads(gt_path.read_text(encoding="utf-8"))
+
+    key = (os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")) if use_llm else None
+    extractor = ExtractorAgent(api_key=key)
+    ingest, textw = IngestWorker(), TextWorker()
+
+    rows, per_field = [], {k: [0, 0] for k in THRESHOLDS}
+    started = time.time()
+    for t in gt["tenders"]:
+        pdf = repo / "sample_tenders" / t["file"]
+        row = {"file": t["file"], "synthetic": t.get("synthetic", True), "run": False}
+        if not pdf.is_file():
+            row["error"] = "fixture missing"
+            rows.append(row)
             continue
+        t0 = time.time()
+        try:
+            ing = ingest.process(str(pdf))
+            txt = textw.process(str(pdf), tender_id=ing.tender_id)
+            matrix = extractor.extract(txt)
+            res = field_results(matrix, t)
+            row.update({"run": True, "latency_ms": round((time.time() - t0) * 1000),
+                        "fields": {k: {"ok": bool(v[0]), "got": v[1], "want": v[2]} for k, v in res.items()}})
+            for k, v in res.items():
+                if v[0] == "ambiguous":
+                    continue
+                per_field[k][1] += 1
+                per_field[k][0] += 1 if v[0] else 0
+        except Exception as e:
+            row.update({"error": f"{type(e).__name__}: {e}"[:160]})
+        rows.append(row)
 
-        text_res = text_worker.process(pdf_path, tender_id=ingest_res.tender_id)
-        matrix = extractor.extract(text_res)
-        verdict = evaluate(matrix, test_profile)
-        elapsed = time.time() - t0
-        latencies.append(elapsed)
+    acc = {k: (v[0] / v[1] if v[1] else 0.0) for k, v in per_field.items()}
+    lat = [r["latency_ms"] for r in rows if r.get("latency_ms")]
+    lat.sort()
+    summary = {
+        "generated": time.strftime("%Y-%m-%d %H:%M:%S%z"),
+        "repo": str(repo),
+        "git_head": os.popen(f"git -C {repo} rev-parse --short HEAD").read().strip() or "n/a",
+        "tier": ("llm+deterministic" if key else "deterministic (no API key)"),
+        "n_documents": len(rows),
+        "per_field": {k: {"correct": per_field[k][0], "of": per_field[k][1], "accuracy": round(acc[k], 3)}
+                      for k in per_field},
+        "latency_ms": {"p50": lat[len(lat) // 2] if lat else None, "p95": lat[int(len(lat) * 0.95) - 1] if lat else None},
+        "thresholds": THRESHOLDS,
+        "passed": all(acc[k] >= THRESHOLDS[k] for k in THRESHOLDS),
+    }
+    return {"summary": summary, "rows": rows, "ground_truth_path": str(gt_path)}
 
-        # Field comparisons
-        # 1. EMD
-        expected_emd = gt.get("emd_amount")
-        actual_emd = matrix.emd_amount
-        emd_ok = (actual_emd == expected_emd) if expected_emd is not None else (actual_emd is None or actual_emd == 0)
-        if emd_ok:
-            emd_matches += 1
 
-        # 2. Deadline
-        expected_dl = gt.get("deadline_date")
-        actual_dl = matrix.submission_deadline.strftime("%Y-%m-%d") if matrix.submission_deadline else None
-        dl_ok = (actual_dl == expected_dl) if expected_dl else (actual_dl is None)
-        if dl_ok:
-            deadline_matches += 1
+def report(out: dict, quiet: bool) -> None:
+    s, rows = out["summary"], out["rows"]
+    if not quiet:
+        print("\nBidSahayak benchmark — " + s["tier"])
+        print(f"repo {s['repo']} @ {s['git_head']}  ·  {s['n_documents']} documents  ·  {s['generated']}\n")
+        print(f"{'document':<34} {'emd':<6} {'deadline':<9} {'turnover':<9} {'exempt':<7}")
+        print("-" * 74)
+        for r in rows:
+            if not r.get("run"):
+                print(f"{r['file'][:33]:<34} {BAD}ERROR {r.get('error','')[:28]}{ESCAPE}")
+                continue
+            f = r["fields"]
+            cells = "".join(
+                (f"{DIM}amb{ESCAPE}" if f[k]["ok"] == "ambiguous" else (f"{OK}ok{ESCAPE}" if f[k]["ok"] else f"{BAD}MISS{ESCAPE}")
+                 ).ljust(6 + 9) for k in ("emd", "deadline", "turnover", "exemption"))
+            print(f"{r['file'][:33]:<34} {cells}")
+        print("-" * 74)
+        for k, v in s["per_field"].items():
+            colour = OK if s["per_field"][k]["accuracy"] >= s["thresholds"][k] else BAD
+            print(f"{k:<10} {v['correct']:>2}/{v['of']:<2}  {colour}{v['accuracy']:.0%}{ESCAPE}"
+                  f"   (threshold {s['thresholds'][k]:.0%})")
+        if s["latency_ms"]["p50"]:
+            print(f"\nlatency   p50 {s['latency_ms']['p50']} ms · p95 {s['latency_ms']['p95']} ms")
+        misses = [(r["file"], k, v) for r in rows if r.get("run") for k, v in r["fields"].items()
+                  if not v["ok"] and v["ok"] != "ambiguous"]
+        print(f"\nmisses ({len(misses)}):")
+        for file, k, v in misses[:40]:
+            print(f"  {DIM}{file[:30]:<32}{k:<10} got {v['got']!r:<22} want {v['want']!r}{ESCAPE}")
+    print(("\nBENCHMARK: PASS" if s["passed"] else "\nBENCHMARK: FAIL — thresholds not met"))
 
-        # 3. Turnover
-        expected_to = gt.get("min_turnover")
-        actual_to = matrix.min_turnover
-        to_ok = (actual_to == expected_to) if expected_to is not None else (actual_to is None or actual_to == 0)
-        if to_ok:
-            turnover_matches += 1
 
-        # 4. Exemption
-        expected_ex = gt.get("emd_exempt_for_mse", True)
-        actual_ex = bool(matrix.emd_exempt_categories and any(c.lower() in ["micro", "small", "mse", "msme"] for c in matrix.emd_exempt_categories))
-        ex_ok = (actual_ex == expected_ex)
-        if ex_ok:
-            exemption_matches += 1
+def to_markdown(out: dict) -> str:
+    s = out["summary"]
+    lines = [f"# Extraction benchmark", "",
+             f"Generated `{s['generated']}` from commit `{s['git_head']}` · tier: **{s['tier']}** · "
+             f"{s['n_documents']} documents.", "",
+             "Ground truth: `" + out["ground_truth_path"].split("/sample")[-1].lstrip("/") +
+             "` — read from the documents, never from the pipeline.", "",
+             "| Field | Correct | Of | Accuracy | Threshold |", "|---|---|---|---|---|"]
+    for k, v in s["per_field"].items():
+        lines.append(f"| {k} | {v['correct']} | {v['of']} | {v['accuracy']:.0%} | {s['thresholds'][k]:.0%} |")
+    if s["latency_ms"]["p50"]:
+        lines += ["", f"Latency: p50 {s['latency_ms']['p50']} ms · p95 {s['latency_ms']['p95']} ms "
+                      f"(single machine, {s['tier']} tier)."]
+    lines += ["", "## Misses", ""]
+    misses = [(r["file"], k, v) for r in out["rows"] if r.get("run") for k, v in r["fields"].items()
+              if not v["ok"] and v["ok"] != "ambiguous"]
+    amb = [(r["file"], k) for r in out["rows"] if r.get("run") for k, v in r["fields"].items() if v["ok"] == "ambiguous"]
+    if not misses:
+        lines.append("None — all compared fields matched ground truth on this run.")
+    else:
+        lines += ["| Document | Field | Extracted | Ground truth |", "|---|---|---|---|"]
+        for f, k, v in misses:
+            lines.append(f"| `{f}` | {k} | `{v['got']}` | `{v['want']}` |")
+    if amb:
+        lines += ["", "## Deliberately ambiguous (excluded from accuracy)", "",
+                  "| Document | Field | Why |", "|---|---|---|"] + \
+                 [f"| `{f}` | {k} | the document states two competing values; correct behaviour is human review |" for f, k in amb]
+    errs = [r for r in out["rows"] if not r.get("run")]
+    if errs:
+        lines += ["", "## Failures", ""] + [f"- `{r['file']}` — {r.get('error')}" for r in errs]
+    return "\n".join(lines) + "\n"
 
-        results.append({
-            "doc": pdf_name,
-            "status": verdict.overall,
-            "emd_match": emd_ok,
-            "deadline_match": dl_ok,
-            "turnover_match": to_ok,
-            "exempt_match": ex_ok,
-            "time_sec": elapsed,
-            "actual_emd": actual_emd,
-            "actual_dl": actual_dl
-        })
 
-    # Metrics
-    latencies.sort()
-    n = len(latencies)
-    p50 = latencies[int(n * 0.50)] if n else 0.0
-    p95 = latencies[min(int(n * 0.95), n - 1)] if n else 0.0
-
-    print(f"Documents Evaluated: {n}/{len(files)}")
-    print(f"EMD Match:           {emd_matches}/{n} ({emd_matches/n*100:.1f}%)")
-    print(f"Deadline Match:      {deadline_matches}/{n} ({deadline_matches/n*100:.1f}%)")
-    print(f"Turnover Match:      {turnover_matches}/{n} ({turnover_matches/n*100:.1f}%)")
-    print(f"Exemption Match:     {exemption_matches}/{n} ({exemption_matches/n*100:.1f}%)")
-    print(f"Latency:             p50={p50*1000:.1f}ms, p95={p95*1000:.1f}ms")
-    print("-" * 70)
-
-    # Output Markdown if requested
-    if md_path:
-        os.makedirs(os.path.dirname(os.path.abspath(md_path)), exist_ok=True)
-        with open(md_path, "w", encoding="utf-8") as f:
-            f.write(f"# BidSahayak Benchmark — {tier_label}\n\n")
-            f.write(f"- **Evaluated**: {n} documents\n")
-            f.write(f"- **EMD Recovery**: {emd_matches}/{n} ({emd_matches/n*100:.1f}%)\n")
-            f.write(f"- **Deadline Accuracy**: {deadline_matches}/{n} ({deadline_matches/n*100:.1f}%)\n")
-            f.write(f"- **Turnover Accuracy**: {turnover_matches}/{n} ({turnover_matches/n*100:.1f}%)\n")
-            f.write(f"- **Exemption Detection**: {exemption_matches}/{n} ({exemption_matches/n*100:.1f}%)\n")
-            f.write(f"- **Latency**: p50 = {p50*1000:.1f} ms · p95 = {p95*1000:.1f} ms\n\n")
-            f.write("| Document | EMD OK | Deadline OK | Turnover OK | Exemption OK | Time (s) |\n")
-            f.write("|---|---|---|---|---|---|\n")
-            for r in results:
-                f.write(f"| `{r['doc']}` | {'✓' if r['emd_match'] else '✗'} | {'✓' if r['deadline_match'] else '✗'} | {'✓' if r['turnover_match'] else '✗'} | {'✓' if r['exempt_match'] else '✗'} | {r['time_sec']:.2f}s |\n")
-        print(f"Written benchmark report to {md_path}")
-
-    return True
+def main() -> int:
+    ap = argparse.ArgumentParser(description="BidSahayak extraction benchmark")
+    ap.add_argument("--repo", default=".")
+    ap.add_argument("--no-llm", action="store_true", help="deterministic tier only")
+    ap.add_argument("--gt", default=None, help="path to ground_truth.json")
+    ap.add_argument("--json", default=None)
+    ap.add_argument("--md", default=None)
+    ap.add_argument("--quiet", action="store_true")
+    a = ap.parse_args()
+    repo = Path(a.repo).resolve()
+    out = run(repo, use_llm=not a.no_llm, only=a.gt)
+    report(out, a.quiet)
+    if a.json:
+        Path(a.json).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.json).write_text(json.dumps(out, indent=1), encoding="utf-8")
+    if a.md:
+        Path(a.md).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.md).write_text(to_markdown(out), encoding="utf-8")
+    return 0 if out["summary"]["passed"] else 1
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="BidSahayak Benchmark Suite")
-    parser.add_argument("--repo", default=".", help="Repository root path")
-    parser.add_argument("--no-llm", action="store_true", help="Force Tier 3 deterministic mode")
-    parser.add_argument("--md", default=None, help="Path to write markdown output")
-    args = parser.parse_args()
-
-    ok = run_benchmark(args.repo, no_llm=args.no_llm, md_path=args.md)
-    sys.exit(0 if ok else 1)
+    sys.exit(main())

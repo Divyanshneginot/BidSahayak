@@ -122,44 +122,59 @@ class SnippetVerifier:
             ),
         )
 
+    @staticmethod
+    def _indian_group(n: int) -> str:
+        """1234567 -> '12,34,567' (Indian digit grouping)."""
+        s = str(abs(int(n)))
+        if len(s) <= 3:
+            return s
+        head, tail = s[:-3], s[-3:]
+        parts = []
+        while len(head) > 2:
+            parts.insert(0, head[-2:])
+            head = head[:-2]
+        if head:
+            parts.insert(0, head)
+        return ",".join(parts + [tail])
+
     @classmethod
-    def verify_value(cls, value: Any, snippet: str) -> Tuple[bool, float]:
-        """
-        Rounds-trips an extracted value against its cited snippet.
-        If the value is not reflected in the snippet text, confidence is downgraded to <= 0.30.
-        Code may only lower confidence, never raise it.
+    def verify_value(cls, snippet: str, value: Any) -> VerificationResult:
+        """Round-trip an extracted value against its own cited snippet (fix F2 / gate G2).
+
+        Contract: (snippet, value) -> VerificationResult. This verifies the VALUE, not just
+        that the quote exists. Callers may only LOWER confidence on failure, never raise it.
         """
         if value is None or not snippet:
-            return False, 0.20
+            return VerificationResult(is_verified=False, match_ratio=0.0,
+                                      reason="empty value or snippet - cannot round-trip")
+        clean = cls._clean(str(snippet)).lower()
 
-        clean_snip = cls._clean(str(snippet)).lower()
-        val_str = str(value)
-
-        # 1. Exact substring check
-        if val_str in clean_snip:
-            return True, 0.85
-
-        # 2. Check formatted number representations (commas, Lakh, Crore)
-        if isinstance(value, (int, float)):
-            val_int = int(value)
-            formatted = f"{val_int:,}"
-            if formatted in clean_snip:
-                return True, 0.85
-            if val_int >= 10_000_000 and val_int % 10_000_000 == 0:
-                cr_str = f"{val_int // 10_000_000} cr"
-                if cr_str in clean_snip:
-                    return True, 0.85
-            if val_int >= 100_000 and val_int % 100_000 == 0:
-                lakh_str = f"{val_int // 100_000} lakh"
-                if lakh_str in clean_snip:
-                    return True, 0.85
-
-        # 3. Check raw digit tokens
-        val_digits = re.findall(r"\d+", val_str)
-        snip_digits = re.findall(r"\d+", clean_snip)
-        if val_digits and any(vd in snip_digits for vd in val_digits):
-            return True, 0.75
-
-        # Value not found in cited snippet: strictly downgrade to <= 0.30
-        return False, 0.25
+        candidates = []
+        sval = str(value)
+        candidates.append(sval.lower())
+        if isinstance(value, (list, tuple, set)):
+            items = [str(x) for x in value]
+            if items and all(i.lower() in clean for i in items):
+                return VerificationResult(is_verified=True, match_ratio=0.95,
+                                          reason="all listed values found in cited snippet")
+            candidates = [i.lower() for i in items]
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            n = int(value)
+            candidates += [f"{n:,}", str(n), cls._indian_group(n), f"{n:,}".replace(",", "")]
+            if n % 100_000 == 0 and n < 10_000_000:
+                candidates.append(f"{n // 100_000} lakh")
+            if n % 10_000_000 == 0:
+                candidates.append(f"{n // 10_000_000} crore")
+        # date-aware: stored values are ISO, documents write DD-MM-YYYY / DD.MM.YYYY
+        m = re.match(r"(\d{4})-(\d{2})-(\d{2})", sval)
+        if m:
+            y, mo, d = m.groups()
+            candidates += [f"{d}-{mo}-{y}", f"{d}/{mo}/{y}", f"{d}.{mo}.{y}", f"{y}-{mo}-{d}"]
+        for c in candidates:
+            if c and len(c) > 2 and c in clean:
+                return VerificationResult(is_verified=True, match_ratio=0.95,
+                                          reason=f"value '{c}' round-trips against the cited snippet",
+                                          verified_snippet=sval)
+        return VerificationResult(is_verified=False, match_ratio=0.0,
+                                  reason="value/snippet mismatch - operator verification required")
 
