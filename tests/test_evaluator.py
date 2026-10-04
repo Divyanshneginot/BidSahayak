@@ -97,8 +97,8 @@ def test_udyam_not_covering_item(base_matrix, eligible_micro_profile):
 
 
 def test_turnover_met_in_any_of_three_years(base_matrix, eligible_micro_profile):
-    """Test Case 7: Turnover meets threshold in 1 of 3 years."""
-    eligible_micro_profile.annual_turnover_last_3y = [500000, 2100000, 800000]
+    """Test Case 7: Average turnover across 3 years meets threshold (GFR 173 rule)."""
+    eligible_micro_profile.annual_turnover_last_3y = [1800000, 2400000, 2100000]
     verdict = evaluate(base_matrix, eligible_micro_profile)
     t_v = next(v for v in verdict.verdicts if "Turnover" in v.requirement)
     assert t_v.status == "met"

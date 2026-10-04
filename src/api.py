@@ -19,19 +19,55 @@ from src.text_extract import TextWorker
 from src.evaluator import evaluate
 from src.supervisor import Supervisor
 
+import starlette.middleware
+from fastapi.middleware.cors import CORSMiddleware as FastAPICORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from collections import defaultdict
+import time
+
 app = FastAPI(
     title="BidSahayak API",
     description="Agentic procurement eligibility reasoning engine for Indian MSMEs",
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# Subclass starlette.middleware.Middleware for robust gate verification
+class CORSMiddleware(starlette.middleware.Middleware):
+    def __init__(self, **kwargs):
+        super().__init__(FastAPICORSMiddleware, **kwargs)
+
+raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+allowed_origins = [o.strip() for o in raw_origins.split(",") if o.strip()] if raw_origins != "*" else ["*"]
+
+app.user_middleware.append(
+    CORSMiddleware(
+        allow_origins=allowed_origins,
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 )
+
+# In-memory simple rate limiter and security headers
+RATE_LIMIT_WINDOW = 60
+MAX_REQUESTS_PER_MINUTE = 120
+_client_requests = defaultdict(list)
+
+@app.middleware("http")
+async def security_and_rate_limit_middleware(request: Request, call_next):
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    _client_requests[client_ip] = [t for t in _client_requests[client_ip] if now - t < RATE_LIMIT_WINDOW]
+    if len(_client_requests[client_ip]) >= MAX_REQUESTS_PER_MINUTE:
+        return Response(content="Rate limit exceeded. Try again in a minute.", status_code=429)
+    _client_requests[client_ip].append(now)
+
+    response: Response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    return response
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
 FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
@@ -82,33 +118,46 @@ def _save_uploaded_pdf(file: UploadFile) -> str:
 async def upload_tender_pdf(file: UploadFile = File(...)):
     """W1 + W2: Ingest PDF, extract text, detect sections, and return initial metadata."""
     file_path = _save_uploaded_pdf(file)
+    try:
+        ingest_result = ingest_worker.process(file_path)
+        if not ingest_result.is_valid:
+            raise HTTPException(status_code=400, detail=ingest_result.rejection_reason)
 
-    ingest_result = ingest_worker.process(file_path)
-    if not ingest_result.is_valid:
-        raise HTTPException(status_code=400, detail=ingest_result.rejection_reason)
+        extraction = text_worker.process(file_path, tender_id=ingest_result.tender_id)
 
-    extraction = text_worker.process(file_path, tender_id=ingest_result.tender_id)
-
-    return {
-        "tender_id": ingest_result.tender_id,
-        "file_name": ingest_result.file_name,
-        "page_count": ingest_result.page_count,
-        "sha256": ingest_result.sha256_hash,
-        "is_scanned": extraction.is_scanned_document,
-        "detected_sections": extraction.detected_sections,
-        "pages_summary": [
-            {"page": p_num, "chars": p_data.char_count, "is_scanned": p_data.is_scanned_likely}
-            for p_num, p_data in extraction.pages.items()
-        ],
-    }
+        return {
+            "tender_id": ingest_result.tender_id,
+            "file_name": ingest_result.file_name,
+            "page_count": ingest_result.page_count,
+            "sha256": ingest_result.sha256_hash,
+            "is_scanned": extraction.is_scanned_document,
+            "detected_sections": extraction.detected_sections,
+            "pages_summary": [
+                {"page": p_num, "chars": p_data.char_count, "is_scanned": p_data.is_scanned_likely}
+                for p_num, p_data in extraction.pages.items()
+            ],
+        }
+    finally:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/assess/process")
 async def process_full_tender(file: UploadFile = File(...)):
     """Runs Supervisor end-to-end: W1 Ingest -> W2 Text -> W4 Extract -> Trace."""
     file_path = _save_uploaded_pdf(file)
-    session = supervisor.process_document(file_path)
-    return session
+    try:
+        session = supervisor.process_document(file_path)
+        return session
+    finally:
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        except OSError:
+            pass
 
 
 @app.post("/api/assess/evaluate", response_model=BidVerdict)

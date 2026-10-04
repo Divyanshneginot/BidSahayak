@@ -21,13 +21,13 @@ class PastWorkRequirement(BaseModel):
 
 class RequirementMatrix(BaseModel):
     tender_id: str
-    title: str
-    issuing_department: str
+    title: str = "Tender Document"
+    issuing_department: str = "Unknown"
     state: Optional[str] = None
     portal: Optional[str] = "CPPP"
     
     emd_amount: Optional[int] = None
-    emd_exempt_categories: list[str] = Field(default_factory=lambda: ["micro", "small"])
+    emd_exempt_categories: list[str] = Field(default_factory=list)
     min_turnover: Optional[int] = None
     turnover_window_years: Optional[int] = 3
     min_years_experience: Optional[int] = None
@@ -39,6 +39,7 @@ class RequirementMatrix(BaseModel):
     eligible_categories: list[str] = Field(default_factory=list)
     requires_class3_dsc: bool = True
     startup_clause_active: bool = False
+    unresolved_fields: list[str] = Field(default_factory=list)
     
     evidence_fields: dict[str, FieldEvidence] = Field(default_factory=dict)
 

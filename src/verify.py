@@ -1,7 +1,7 @@
 import unicodedata
 import re
 from difflib import SequenceMatcher
-from typing import Optional
+from typing import Optional, Tuple, Any
 from pydantic import BaseModel
 
 
@@ -121,3 +121,45 @@ class SnippetVerifier:
                 f"Snippet could not be verified on cited page. Flagged for human review."
             ),
         )
+
+    @classmethod
+    def verify_value(cls, value: Any, snippet: str) -> Tuple[bool, float]:
+        """
+        Rounds-trips an extracted value against its cited snippet.
+        If the value is not reflected in the snippet text, confidence is downgraded to <= 0.30.
+        Code may only lower confidence, never raise it.
+        """
+        if value is None or not snippet:
+            return False, 0.20
+
+        clean_snip = cls._clean(str(snippet)).lower()
+        val_str = str(value)
+
+        # 1. Exact substring check
+        if val_str in clean_snip:
+            return True, 0.85
+
+        # 2. Check formatted number representations (commas, Lakh, Crore)
+        if isinstance(value, (int, float)):
+            val_int = int(value)
+            formatted = f"{val_int:,}"
+            if formatted in clean_snip:
+                return True, 0.85
+            if val_int >= 10_000_000 and val_int % 10_000_000 == 0:
+                cr_str = f"{val_int // 10_000_000} cr"
+                if cr_str in clean_snip:
+                    return True, 0.85
+            if val_int >= 100_000 and val_int % 100_000 == 0:
+                lakh_str = f"{val_int // 100_000} lakh"
+                if lakh_str in clean_snip:
+                    return True, 0.85
+
+        # 3. Check raw digit tokens
+        val_digits = re.findall(r"\d+", val_str)
+        snip_digits = re.findall(r"\d+", clean_snip)
+        if val_digits and any(vd in snip_digits for vd in val_digits):
+            return True, 0.75
+
+        # Value not found in cited snippet: strictly downgrade to <= 0.30
+        return False, 0.25
+

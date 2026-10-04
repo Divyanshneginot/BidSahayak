@@ -1,4 +1,4 @@
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, timedelta, date
 from typing import Optional
 from src.models import (
     RequirementMatrix,
@@ -6,6 +6,32 @@ from src.models import (
     RequirementVerdict,
     BidVerdict,
 )
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+
+def calculate_effective_turnover(turnovers: list[int]) -> int:
+    """Calculates average annual turnover across reported financial years (not max)."""
+    if not turnovers:
+        return 0
+    return int(sum(turnovers) / len(turnovers))
+
+
+def evaluate_dsc_timing(deadline: datetime, holds_dsc: bool) -> str:
+    """
+    Evaluates whether vendor can obtain Class 3 DSC before deadline.
+    Under CPPP guidance, obtaining a new Class 3 DSC takes 3-7 days.
+    If vendor lacks DSC and days < 7 -> 'gap_impossible'.
+    If vendor lacks DSC and days >= 7 -> 'gap_addressable'.
+    If vendor holds DSC -> 'met'.
+    """
+    if holds_dsc:
+        return "met"
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=IST)
+    now = datetime.now(deadline.tzinfo)
+    days = (deadline - now).total_seconds() / 86400.0
+    return "gap_impossible" if days < 7.0 else "gap_addressable"
 
 
 def evaluate(
@@ -153,12 +179,12 @@ def evaluate(
         turnover_evidence = matrix.evidence_fields.get("min_turnover")
         evidence_str = turnover_evidence.source_snippet if turnover_evidence else f"₹{matrix.min_turnover:,}"
         
-        max_vendor_turnover = max(profile.annual_turnover_last_3y) if profile.annual_turnover_last_3y else 0
-        if max_vendor_turnover >= matrix.min_turnover:
+        effective_vendor_turnover = calculate_effective_turnover(profile.annual_turnover_last_3y)
+        if effective_vendor_turnover >= matrix.min_turnover:
             verdicts.append(RequirementVerdict(
                 requirement="Annual Turnover",
                 status="met",
-                reason=f"Maximum turnover in last 3 years (₹{max_vendor_turnover:,}) meets required ₹{matrix.min_turnover:,}.",
+                reason=f"Average annual turnover in last 3 years (₹{effective_vendor_turnover:,}) meets required ₹{matrix.min_turnover:,}.",
                 evidence=evidence_str,
             ))
         elif matrix.startup_clause_active and profile.startup_india:
@@ -173,8 +199,8 @@ def evaluate(
                 requirement="Annual Turnover",
                 status="gap",
                 reason=(
-                    f"Required minimum turnover is ₹{matrix.min_turnover:,}, but vendor maximum in last 3 years "
-                    f"is ₹{max_vendor_turnover:,} (Shortfall: ₹{matrix.min_turnover - max_vendor_turnover:,})."
+                    f"Required minimum turnover is ₹{matrix.min_turnover:,}, but vendor 3-year average "
+                    f"is ₹{effective_vendor_turnover:,} (Shortfall: ₹{matrix.min_turnover - effective_vendor_turnover:,})."
                 ),
                 evidence=evidence_str,
                 remedy="Explore joint-venture (JV) consortium or sub-contractor partnership if permitted in tender.",
@@ -234,62 +260,95 @@ def evaluate(
     impossible_reason = None
 
     if matrix.submission_deadline:
-        # Normalize timezone
         deadline = matrix.submission_deadline
         if deadline.tzinfo is None:
-            deadline = deadline.replace(tzinfo=timezone.utc)
+            deadline = deadline.replace(tzinfo=IST)
         
-        diff = deadline - now
-        days_to_deadline = max(0, diff.days)
+        cmp_now = now if now.tzinfo is not None else now.replace(tzinfo=IST)
+        diff = deadline - cmp_now
+        days_to_deadline = max(0, int(diff.total_seconds() / 86400.0))
 
-        if matrix.requires_class3_dsc and not profile.holds_class3_dsc:
-            if days_to_deadline < 7:
+        if matrix.requires_class3_dsc:
+            dsc_status = evaluate_dsc_timing(deadline, profile.holds_class3_dsc)
+            if dsc_status == "gap_impossible":
                 participation_impossible = True
                 impossible_reason = (
                     f"A new Class 3 DSC takes 3–7 days to issue (official CPPP guidance). "
                     f"This tender closes in {days_to_deadline} days. Unless vendor already possesses "
                     "a valid DSC token, bid submission is mathematically impossible."
                 )
-                verdicts.append(RequirementVerdict(
+                verdict = RequirementVerdict(
                     requirement="Class 3 Digital Signature Certificate (DSC)",
                     status="gap",
                     reason=impossible_reason,
                     remedy="Immediate emergency issuance of Class 3 DSC token via e-Mudhra or (n)Code.",
-                ))
-            else:
-                verdicts.append(RequirementVerdict(
+                )
+                verdicts.append(verdict)
+                gaps.append(verdict)
+            elif dsc_status == "gap_addressable":
+                verdict = RequirementVerdict(
                     requirement="Class 3 Digital Signature Certificate (DSC)",
                     status="gap",
                     reason=f"Vendor lacks Class 3 DSC. Tender closes in {days_to_deadline} days.",
                     remedy="Apply for Class 3 DSC immediately (takes 3-5 business days).",
+                )
+                verdicts.append(verdict)
+                gaps.append(verdict)
+            else:
+                verdicts.append(RequirementVerdict(
+                    requirement="Class 3 Digital Signature Certificate (DSC)",
+                    status="met",
+                    reason="Vendor holds valid Class 3 DSC required for e-procurement portal.",
                 ))
-        else:
-            verdicts.append(RequirementVerdict(
-                requirement="Class 3 Digital Signature Certificate (DSC)",
-                status="met",
-                reason="Vendor holds valid Class 3 DSC required for e-procurement portal.",
-            ))
 
     # 7. Overall Verdict Determination
-    # Rule: If any unreviewed low-confidence fields exist, overall MUST be needs-human-review
-    if low_confidence_fields and not matrix.evidence_fields.get("_human_approved", False):
+    is_empty_matrix = (
+        len(matrix.evidence_fields) == 0
+        and matrix.emd_amount is None
+        and matrix.min_turnover is None
+        and matrix.submission_deadline is None
+        and matrix.min_years_experience is None
+        and not matrix.required_certifications
+    )
+    unresolved_fields = getattr(matrix, "unresolved_fields", [])
+
+    blocking_gaps = []
+    addressable_gaps = []
+    for g in gaps:
+        if "Class 3" in g.requirement and participation_impossible:
+            blocking_gaps.append(g)
+        elif g.requirement in ["Annual Turnover", "Experience (Years in Business)"]:
+            blocking_gaps.append(g)
+        elif g.requirement == "Mandatory Certifications":
+            blocking_gaps.append(g)
+        else:
+            addressable_gaps.append(g)
+
+    if is_empty_matrix:
+        overall = "needs-human-review"
+        summary = "Tender matrix contains no extracted requirements. Operator review required before assessment."
+    elif unresolved_fields:
+        overall = "needs-human-review"
+        summary = f"Extraction contains unresolved fields ({', '.join(unresolved_fields)}). Operator review required."
+    elif low_confidence_fields and not matrix.evidence_fields.get("_human_approved", False):
         overall = "needs-human-review"
         summary = (
             f"Extraction contains {len(low_confidence_fields)} low-confidence field(s) "
             f"({', '.join(low_confidence_fields)}). Operator review required before final verdict."
         )
-    elif participation_impossible:
+    elif participation_impossible or blocking_gaps:
         overall = "not-eligible"
-        summary = f"Participation Impossible: {impossible_reason}"
-    elif len(gaps) == 0:
+        summary = (
+            f"Participation Impossible: {impossible_reason}"
+            if participation_impossible
+            else f"Vendor does not meet mandatory criteria ({len(blocking_gaps)} blocking gap(s) identified)."
+        )
+    elif len(addressable_gaps) == 0:
         overall = "eligible"
         summary = "Vendor meets all evaluated eligibility criteria. Ready for bid preparation."
-    elif all(g.status == "gap" and "turnover" not in g.requirement.lower() for g in gaps) and len(gaps) <= 2:
-        overall = "eligible-with-gaps"
-        summary = f"Vendor meets core criteria with {len(gaps)} addressable gap(s). Action required."
     else:
-        overall = "not-eligible"
-        summary = f"Vendor does not meet mandatory criteria ({len(gaps)} gap(s) identified)."
+        overall = "eligible-with-gaps"
+        summary = f"Vendor meets core criteria with {len(addressable_gaps)} addressable gap(s). Action required."
 
     return BidVerdict(
         overall=overall,

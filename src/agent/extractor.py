@@ -38,15 +38,19 @@ class ExtractorAgent:
         )
         self.provider = os.getenv("LLM_PROVIDER")
         if not self.provider and self.api_key:
-            if self.api_key.startswith("AQ."):
+            if self.api_key.startswith("AIza") or self.api_key.startswith("AQ."):
                 self.provider = "gemini"
             elif self.api_key.startswith("gsk_"):
                 self.provider = "groq"
-            else:
+            elif self.api_key.startswith("sk-"):
                 self.provider = "openai"
+            else:
+                self.provider = "gemini"
 
-        default_model = "gemini-3.5-flash" if self.provider == "gemini" else "openai/gpt-oss-120b"
+        default_model = "gemini-2.0-flash" if self.provider == "gemini" else "openai/gpt-oss-120b"
         self.model = model or os.getenv("LLM_MODEL") or default_model
+        self.last_tier = 3
+        self.fallback_reason: Optional[str] = None
 
     def extract(self, extraction_result: ExtractionResult) -> RequirementMatrix:
         """
@@ -55,15 +59,21 @@ class ExtractorAgent:
         # Tier 3 directly if no API key is provided
         if not self.api_key or self.api_key.startswith("your-api"):
             logger.info("No LLM API key configured. Executing Tier 3 deterministic regex extractor.")
+            self.last_tier = 3
+            self.fallback_reason = "No API key configured"
             matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
             return self._verify_all_evidence(matrix, extraction_result)
 
         # Tier 1: LLM Structured Extraction
         try:
             matrix = self._call_llm_extractor(extraction_result)
+            self.last_tier = 1
+            self.fallback_reason = None
             return self._verify_all_evidence(matrix, extraction_result)
         except Exception as e:
             logger.warning(f"Tier 1 LLM extraction failed: {e}. Executing Tier 3 fallback.")
+            self.last_tier = 3
+            self.fallback_reason = str(e)
             # Fallback to Tier 3
             matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
             return self._verify_all_evidence(matrix, extraction_result)
@@ -154,7 +164,16 @@ class ExtractorAgent:
                     f"Snippet not located. Operator verification required."
                 )
             else:
-                # Calibrate confidence upward if verified
-                evidence.confidence = max(evidence.confidence, 0.88)
+                # Round-trip value verification: code may only lower confidence, never raise it
+                val_ok, val_conf = SnippetVerifier.verify_value(
+                    evidence.value_normalised or evidence.value_raw,
+                    evidence.source_snippet
+                )
+                if not val_ok:
+                    evidence.confidence = min(evidence.confidence, val_conf)
+                    evidence.ambiguity = (
+                        f"Value round-trip verification failed: Extracted value does not match "
+                        f"cited snippet text on Page {evidence.source_page}."
+                    )
 
         return matrix

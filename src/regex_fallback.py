@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Any
 from src.models import RequirementMatrix, FieldEvidence
 from src.text_extract import ExtractionResult
 
@@ -15,7 +15,7 @@ class DeterministicRegexExtractor:
 
     @staticmethod
     def parse_inr(amount_str: str) -> Optional[int]:
-        """Convert 'Rs. 50,000' or '5 Lakhs' or '₹1.5 Crore' into integer."""
+        """Convert 'Rs. 50,000' or '5 Lakhs' or '₹1.5 Crore' or '10,000.00' into integer."""
         if not amount_str:
             return None
         clean = amount_str.replace(",", "").strip()
@@ -24,7 +24,7 @@ class DeterministicRegexExtractor:
         cr_match = re.search(r"([\d\.]+)\s*(?:cr|crore|करोड़)", clean, re.I)
         if cr_match:
             try:
-                return int(float(cr_match.group(1)) * 10_000_000)
+                return int(round(float(cr_match.group(1)) * 10_000_000))
             except ValueError:
                 pass
 
@@ -32,15 +32,15 @@ class DeterministicRegexExtractor:
         lakh_match = re.search(r"([\d\.]+)\s*(?:lakh|lac|लाख)", clean, re.I)
         if lakh_match:
             try:
-                return int(float(lakh_match.group(1)) * 100_000)
+                return int(round(float(lakh_match.group(1)) * 100_000))
             except ValueError:
                 pass
 
-        # Check raw digits
-        digits = re.findall(r"\d+", clean)
-        if digits:
+        # Check decimal or standard number e.g. 10000.00 or 75000.50
+        num_match = re.search(r"(\d+(?:\.\d+)?)", clean)
+        if num_match:
             try:
-                return int("".join(digits))
+                return int(round(float(num_match.group(1))))
             except ValueError:
                 pass
         return None
@@ -60,8 +60,8 @@ class DeterministicRegexExtractor:
         for page_num, page_data in extraction.pages.items():
             text = page_data.normalized_text
             
-            # Check exemption mentions
-            if re.search(r"(?i)(mse[s]?|micro\s+and\s+small|msme|udyam)\s*(?:are\s+)?exempt", text):
+            # Check exemption mentions (MSE, MSME, Micro & Small, Udyam)
+            if re.search(r"(?i)(?:micro\s+and\s+small|mse[s]?|msme|udyam).{0,200}?exempt", text, re.S):
                 if "micro" not in exempt_categories:
                     exempt_categories.extend(["micro", "small"])
 
@@ -82,7 +82,8 @@ class DeterministicRegexExtractor:
                         source_snippet=snippet,
                     )
 
-        return found_amount, exempt_categories or ["micro", "small"], best_evidence
+        # Fail closed: never default to assumed exemptions
+        return found_amount, exempt_categories, best_evidence
 
     @classmethod
     def extract_turnover(cls, extraction: ExtractionResult) -> Tuple[Optional[int], Optional[FieldEvidence]]:
@@ -112,26 +113,40 @@ class DeterministicRegexExtractor:
         return None, None
 
     @classmethod
-    def extract_deadline(cls, extraction: ExtractionResult) -> Tuple[Optional[datetime], Optional[FieldEvidence]]:
-        """Extract bid submission closing date."""
+    def extract_deadline(cls, extraction_or_text: Any) -> Any:
+        """Extract bid submission closing date from ExtractionResult or text string."""
         date_pattern = re.compile(
-            r"(?i)(?:submission\s+(?:end|closing)\s+date|last\s+date\s+of\s+bid|अंतिम\s+तिथि)[^\n\r]{0,40}?"
-            r"(\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}(?:\s+\d{1,2}:\d{2})?)",
+            r"(?i)(?:submission\s+(?:end|closing)\s+date|last\s+date\s+of\s+bid|closing\s+date|due\s+date|submission\s+deadline|अंतिम\s+तिथि)[^\n\r]{0,50}?"
+            r"((?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4}))",
             re.M,
         )
-        for page_num, page_data in extraction.pages.items():
+
+        def _parse_raw(raw: str) -> Optional[datetime]:
+            m = re.search(r"(\d{4}-\d{2}-\d{2})|(\d{1,2}[-/\.]\d{1,2}[-/\.]\d{2,4})", raw)
+            if not m:
+                return None
+            dstr = m.group(1) or m.group(2)
+            for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y", "%Y-%m-%d"]:
+                try:
+                    return datetime.strptime(dstr, fmt)
+                except ValueError:
+                    pass
+            return None
+
+        # Direct string call support
+        if isinstance(extraction_or_text, str):
+            match = date_pattern.search(extraction_or_text)
+            if match:
+                return _parse_raw(match.group(1))
+            return _parse_raw(extraction_or_text)
+
+        # ExtractionResult call support
+        for page_num, page_data in extraction_or_text.pages.items():
             text = page_data.normalized_text
             match = date_pattern.search(text)
             if match:
                 raw_date = match.group(1).strip()
-                # Parse standard date formats
-                parsed_dt = None
-                for fmt in ["%d-%m-%Y %H:%M", "%d/%m/%Y %H:%M", "%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y"]:
-                    try:
-                        parsed_dt = datetime.strptime(raw_date, fmt)
-                        break
-                    except ValueError:
-                        continue
+                parsed_dt = _parse_raw(raw_date)
                 if parsed_dt:
                     snippet = text[max(0, match.start() - 10) : min(len(text), match.end() + 30)].strip()
                     evidence = FieldEvidence(
@@ -144,6 +159,8 @@ class DeterministicRegexExtractor:
                     )
                     return parsed_dt, evidence
         return None, None
+
+
 
     @classmethod
     def build_matrix(cls, extraction: ExtractionResult) -> RequirementMatrix:
