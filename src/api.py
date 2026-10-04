@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 import os
 import shutil
 from typing import Optional
@@ -14,6 +15,7 @@ from src.models import (
 from src.ingest import IngestWorker
 from src.text_extract import TextWorker
 from src.evaluator import evaluate
+from src.supervisor import Supervisor
 
 app = FastAPI(
     title="BidSahayak API",
@@ -30,10 +32,12 @@ app.add_middleware(
 )
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 ingest_worker = IngestWorker(max_size_mb=25, max_pages=400)
 text_worker = TextWorker()
+supervisor = Supervisor()
 
 
 @app.get("/api/health")
@@ -74,6 +78,20 @@ async def upload_tender_pdf(file: UploadFile = File(...)):
             for p_num, p_data in extraction.pages.items()
         ],
     }
+
+
+@app.post("/api/assess/process")
+async def process_full_tender(file: UploadFile = File(...)):
+    """Runs Supervisor end-to-end: W1 Ingest -> W2 Text -> W4 Extract -> Trace."""
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
+
+    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    session = supervisor.process_document(file_path)
+    return session
 
 
 @app.post("/api/assess/evaluate", response_model=BidVerdict)
@@ -141,3 +159,15 @@ def override_requirement_field(payload: dict):
         "note": operator_note,
     })
     return verdict
+
+
+@app.get("/")
+def serve_index():
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    return {"message": "BidSahayak API active. Frontend index.html not found."}
+
+
+if os.path.exists(FRONTEND_DIR):
+    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")

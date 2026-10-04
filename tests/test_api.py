@@ -13,6 +13,12 @@ def test_health_endpoint():
     assert data["service"] == "BidSahayak"
 
 
+def test_root_serves_frontend():
+    res = client.get("/")
+    assert res.status_code == 200
+    assert "BidSahayak" in res.text
+
+
 def test_evaluate_endpoint():
     matrix = {
         "tender_id": "TEST-01",
@@ -64,3 +70,15 @@ def test_override_endpoint():
     data_override = res_override.json()
     assert data_override["overall"] == "eligible"
     assert any(a["action"] == "human_override" for a in data_override["audit_log"])
+
+
+def test_upload_and_process_file():
+    pdf_path = os.path.join("sample_tenders", "imd-tender.pdf")
+    if os.path.exists(pdf_path):
+        with open(pdf_path, "rb") as f:
+            res = client.post("/api/assess/process", files={"file": ("imd-tender.pdf", f, "application/pdf")})
+        assert res.status_code == 200
+        data = res.json()
+        assert "session_id" in data
+        assert "trace" in data
+        assert len(data["trace"]) >= 3
