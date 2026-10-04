@@ -24,7 +24,7 @@ class RequirementMatrix(BaseModel):
     title: str
     issuing_department: str
     state: Optional[str] = None
-    portal: str = "CPPP"
+    portal: Optional[str] = "CPPP"
     
     emd_amount: Optional[int] = None
     emd_exempt_categories: list[str] = Field(default_factory=lambda: ["micro", "small"])

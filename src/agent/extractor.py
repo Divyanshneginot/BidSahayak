@@ -53,7 +53,7 @@ class ExtractorAgent:
     def _call_llm_extractor(self, extraction_result: ExtractionResult) -> RequirementMatrix:
         import requests
 
-        doc_sample = extraction_result.full_text[:30000]  # Respect token boundary
+        doc_sample = extraction_result.full_text[:14000]  # Respect token boundary for TPM tier
         prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(document_text=doc_sample)
 
         # Dynamic endpoint selection
@@ -91,6 +91,8 @@ class ExtractorAgent:
                 data["title"] = f"Tender {extraction_result.tender_id}"
             if not data.get("issuing_department"):
                 data["issuing_department"] = "Public Procurement Authority"
+            if not data.get("portal"):
+                data["portal"] = "CPPP"
             return RequirementMatrix(**data)
         else:
             raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
