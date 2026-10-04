@@ -72,6 +72,33 @@ def test_override_endpoint():
     assert any(a["action"] == "human_override" for a in data_override["audit_log"])
 
 
+def test_override_clears_unresolved_field():
+    matrix = {
+        "tender_id": "TND-UNRES-01",
+        "title": "Unresolved Tender",
+        "min_turnover": None,
+        "unresolved_fields": ["min_turnover", "submission_deadline"],
+    }
+    profile = {
+        "business_name": "Agrawal Electricals",
+        "annual_turnover_last_3y": [2000000],
+    }
+    override_payload = {
+        "matrix": matrix,
+        "profile": profile,
+        "field_name": "min_turnover",
+        "new_value": 1500000,
+        "operator_note": "Manual input of minimum turnover",
+    }
+    res_override = client.post("/api/assess/override", json=override_payload)
+    assert res_override.status_code == 200
+    data = res_override.json()
+    # Check that min_turnover is no longer listed as unresolved in the evaluated matrix
+    for section in data.get("sections", []):
+        if section.get("section_id") == 1:
+            assert "min_turnover" not in section.get("details", "")
+
+
 def test_upload_and_process_file():
     pdf_path = os.path.join("sample_tenders", "imd-tender.pdf")
     if os.path.exists(pdf_path):

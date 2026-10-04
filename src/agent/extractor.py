@@ -4,10 +4,12 @@ import json
 import logging
 from typing import Optional, Any
 try:
+    from pathlib import Path
     from dotenv import load_dotenv
     load_dotenv()
-    if os.path.exists("C:/Users/Divyansh/Desktop/.env"):
-        load_dotenv("C:/Users/Divyansh/Desktop/.env")
+    parent_env = Path(__file__).resolve().parents[2] / ".env"
+    if parent_env.exists():
+        load_dotenv(parent_env)
 except ImportError:
     pass
 
@@ -36,13 +38,23 @@ class ExtractorAgent:
     """
 
     def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
-        self.api_key = (
-            api_key
-            or os.getenv("GEMINI_API_KEY")
-            or os.getenv("GROQ_API_KEY")
-            or os.getenv("LLM_API_KEY")
-        )
         self.provider = os.getenv("LLM_PROVIDER")
+        if api_key is None:
+            if self.provider == "groq":
+                self.api_key = os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")
+            elif self.provider == "openai":
+                self.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
+            elif self.provider == "gemini":
+                self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("LLM_API_KEY")
+            else:
+                self.api_key = (
+                    os.getenv("GROQ_API_KEY")
+                    or os.getenv("LLM_API_KEY")
+                    or os.getenv("GEMINI_API_KEY")
+                )
+        else:
+            self.api_key = api_key
+
         if not self.provider and self.api_key:
             if self.api_key.startswith("AIza") or self.api_key.startswith("AQ."):
                 self.provider = "gemini"
@@ -240,7 +252,7 @@ class ExtractorAgent:
     def _call_llm(self, prompt_text: str) -> dict:
         import requests
 
-        if self.provider == "gemini" or (self.api_key and self.api_key.startswith("AQ.")):
+        if (self.provider == "gemini" or (self.api_key and (self.api_key.startswith("AIza") or self.api_key.startswith("AQ.")))) and self.provider != "groq":
             gemini_model = self.model if "gemini" in self.model else "gemini-2.0-flash"
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={self.api_key}"
             payload = {
@@ -277,11 +289,20 @@ class ExtractorAgent:
                 "response_format": {"type": "json_object"},
                 "temperature": 0.0,
             }
-            res = requests.post(endpoint, json=payload, headers=headers, timeout=25)
-            if res.status_code == 200:
-                raw_json = res.json()["choices"][0]["message"]["content"]
-            else:
-                raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
+            import time
+            raw_json = None
+            for retry_429 in range(4):
+                res = requests.post(endpoint, json=payload, headers=headers, timeout=25)
+                if res.status_code == 429:
+                    time.sleep(7)
+                    continue
+                if res.status_code == 200:
+                    raw_json = res.json()["choices"][0]["message"]["content"]
+                    break
+                else:
+                    raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
+            if raw_json is None:
+                raise RuntimeError(f"LLM API ({endpoint}) rate limited after 4 retries")
 
         clean_json = raw_json.strip()
         if clean_json.startswith("```"):
@@ -291,6 +312,9 @@ class ExtractorAgent:
 
     @staticmethod
     def _parse_matrix_dict(data: dict, tender_id: str) -> RequirementMatrix:
+        for str_field in ["tender_id", "title", "issuing_department", "state", "portal"]:
+            if str_field in data and isinstance(data[str_field], dict):
+                data[str_field] = str(data[str_field].get("value") or "")
         if not data.get("tender_id"):
             data["tender_id"] = tender_id
         if not data.get("title"):
@@ -299,6 +323,24 @@ class ExtractorAgent:
             data["issuing_department"] = "Public Procurement Authority"
         if not data.get("portal"):
             data["portal"] = "CPPP"
+        for list_field in ["required_certifications", "required_past_work", "emd_exempt_categories", "unresolved_fields"]:
+            if data.get(list_field) is None:
+                data[list_field] = []
+        if isinstance(data.get("evidence_fields"), list):
+            data["evidence_fields"] = {
+                item.get("field_name", f"field_{i}"): item
+                for i, item in enumerate(data["evidence_fields"])
+                if isinstance(item, dict)
+            }
+        if "evidence_fields" in data and isinstance(data["evidence_fields"], dict):
+            cleaned_ev = {}
+            for k, v in data["evidence_fields"].items():
+                if isinstance(v, dict):
+                    v.setdefault("field_name", k)
+                    if v.get("source_page") is not None and v.get("source_snippet"):
+                        v["value_raw"] = str(v.get("value_raw") or "")
+                        cleaned_ev[k] = v
+            data["evidence_fields"] = cleaned_ev
         return RequirementMatrix(**data)
 
     def _verify_all_evidence(
@@ -311,6 +353,8 @@ class ExtractorAgent:
         """
         failures = []
         for field_name, evidence in matrix.evidence_fields.items():
+            if evidence.source_page is None or not evidence.source_snippet:
+                continue
             page_text = ""
             if evidence.source_page in extraction_result.pages:
                 page_text = extraction_result.pages[evidence.source_page].normalized_text

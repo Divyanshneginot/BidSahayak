@@ -5,11 +5,11 @@ from pydantic import BaseModel, Field
 
 class FieldEvidence(BaseModel):
     field_name: str
-    value_raw: str
+    value_raw: Optional[str] = ""
     value_normalised: Any = None
-    confidence: float = Field(ge=0.0, le=1.0)
-    source_page: int
-    source_snippet: str
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    source_page: Optional[int] = None
+    source_snippet: Optional[str] = ""
     ambiguity: Optional[str] = None
 
 

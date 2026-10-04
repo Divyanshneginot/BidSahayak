@@ -216,6 +216,9 @@ def override_requirement_field(payload: dict):
         }
 
     matrix_data["evidence_fields"] = evidence_fields
+    matrix_data["unresolved_fields"] = [
+        f for f in matrix_data.get("unresolved_fields", []) if f != override_field
+    ]
     matrix = RequirementMatrix(**matrix_data)
     profile = VendorProfile(**profile_data)
 

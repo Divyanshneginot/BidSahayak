@@ -3,7 +3,12 @@ import sys
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8')
 
-with open(r'C:\Users\Divyansh\Downloads\index.html', 'r', encoding='utf-8') as f:
+from pathlib import Path
+html_path = Path.home() / "Downloads" / "index.html"
+if not html_path.exists():
+    html_path = Path("frontend/index.html")
+
+with open(html_path, 'r', encoding='utf-8') as f:
     text = f.read()
 
 checks = {

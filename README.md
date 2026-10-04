@@ -24,25 +24,27 @@ If it isn't in that chain, it doesn't exist.
 | Step | LLM or Code? | Why |
 |---|---|---|
 | PDF → text | **Code** (pypdf, raster-scan detection) | Deterministic, testable, free |
-| Text → requirement fields | **LLM**, schema-constrained | Language is genuinely ambiguous across 40+ phrasings |
-| Fields → numbers/dates | **Code**, validating LLM output | Parse and reject anything that doesn't round-trip |
-| Compare vs vendor profile | **Code — pure function** | Must be 100% predictable and testable |
-| Produce the verdict | **Code** | Follows from the comparison |
-| Explain in plain Hindi/English | **LLM** | Explanation is where LLMs earn their keep |
+| Page-aware section retrieval | **Code** (keyword scoring) | Scans 40–100 page tenders to extract critical ITB/EMD/turnover sections |
+| Text → requirement fields | **LLM (Tier 1)**, schema-constrained | Language is genuinely ambiguous across 40+ phrasings |
+| Citation verification | **Code** (SnippetVerifier) | Verifies verbatim snippet on cited page; fails closed on hallucinations |
+| Agentic repair loop | **LLM (Tier 1)** | On verification failure, calls REPAIR_PROMPT_TEMPLATE (max 2 retries) |
+| Regex fallback | **Code (Tier 3)** | Deterministic offline parser if no API key or verification retries exhausted |
+| Compare vs vendor profile | **Code — pure function** | Must be 100% predictable, testable, and compliant with GFR 2017 |
+| Produce the verdict | **Code** | Follows from comparison (EMD, turnover, similar work, net worth, DSC window) |
 
 ### Design Decisions
 
 1. **The Evaluator is deterministic.** Same inputs → same verdict, always. An LLM deciding eligibility is a bug factory.
-2. **No snippet → not shown as fact.** Every extracted field must cite a verifiable source page and snippet. If it can't, it's flagged `needs-human-review`. This is also my prompt-injection defence.
-3. **"Never confidently wrong" over "always answers."** The system prefers `needs-human-review` over guessing. Fields below confidence 0.7 are excluded from the verdict until a human confirms.
-4. **Four human gates, not one vague "review" screen.** Profile confirmation, extraction review, verdict sign-off, draft release.
+2. **No snippet → not shown as fact.** Every extracted field must cite a verifiable source page and snippet. If it can't, it's flagged `needs-human-review`.
+3. **"Never confidently wrong" over "always answers."** The system prefers `needs-human-review` over guessing. `CONFIDENCE_THRESHOLD` is read from env (default 0.70).
+4. **Human in the loop.** Operator can approve/override any field via the UI; overriding clears the field from `unresolved_fields` and instantly recomputes the verdict.
 5. **There is no code path that submits a bid.** Not to CPPP, not to GeM, not anywhere.
 
 ### How the Human Stays in Control
 
 - **Per-field approve/override** — every extracted requirement shows value, confidence, and source snippet. Disagree → type correction → verdict recomputes.
-- **Confidence gating** — fields below 0.7 render amber and are excluded from the verdict until confirmed.
-- **Audit log** — every agent action, every human override, every timestamp, visible in a "What did the agent do?" panel.
+- **Confidence gating** — fields below threshold render amber and are excluded from the verdict until confirmed.
+- **Audit log** — every agent step (initial call, repair attempts, fallback, human overrides) logged to audit trace.
 - **No auto-submit, hard-coded.** There is no API client for CPPP or GeM submission in this codebase.
 
 ## How to Run
@@ -53,12 +55,12 @@ pip install -r requirements.txt
 
 # 2. Set environment variables
 cp .env.example .env
-# Edit .env with your LLM API key
+# Edit .env with your LLM API key (Groq, Gemini, or OpenAI)
 
 # 3. Run the server
 python -m uvicorn src.api:app --reload
 
-# 4. Run tests
+# 4. Run tests (38 tests)
 pytest tests/ -v
 ```
 
@@ -66,8 +68,9 @@ pytest tests/ -v
 
 > *Will be added at deployment (hour 20–24)*
 
-## Benchmark Results (14-document suite)
+## Benchmark Results
 
+### 1. Deterministic Tier Benchmark (14 Synthetic + Seed Documents)
 Regenerate with `python scripts/benchmark.py --repo . --no-llm --md docs/BENCHMARK.md`.
 Ground truth lives in `assets/ground_truth.json` and is read from the documents, never from the pipeline.
 
@@ -79,14 +82,17 @@ Ground truth lives in `assets/ground_truth.json` and is read from the documents,
 | MSE exemption stated | 14 | 14 | **100%** | ≥ 90% |
 
 *Latency:* p50 33 ms · p95 85 ms (deterministic tier, single machine, no API key).
-One document's EMD is excluded from the denominator: `aiims_ppe_supply.pdf` states **two** competing
-figures (₹40,00,000 and ₹40,000), so the correct output there is human review, not a number.
 
-**Tier note.** These figures are the **deterministic tier** (no LLM). The LLM tier was not run in this
-environment because no API key was configured; when a key is present, run `python scripts/benchmark.py --repo .`
-and it reports the provider, the resolved model, and — per document — which tier actually answered
-(`last_tier`) plus any `fallback_reason`. A run in which any document reports `tier=3` is a fallback run and
-must not be published as an LLM result.
+### 2. Real LLM-Tier Benchmark Run (`docs/BENCHMARK-llm.md`)
+Run with active LLM API key: `python scripts/benchmark.py --repo . --md docs/BENCHMARK-llm.md`.
+- **Tier 1 (Agentic LLM Extraction)** ran on all 14 documents with zero fallbacks to Tier 3.
+- Accuracy: EMD 85%, Deadline 79%, Turnover 86%, Exemption 93% (p50: 25.8s per tender).
+
+### 3. Held-Out Benchmark from 10 Real Public Tenders (`docs/BENCHMARK-heldout.md`)
+Run against 10 real public tenders (64–107 pages each, from IIT Kanpur / CPPP) with zero regex tuning:
+`python scripts/benchmark.py --repo . --gt assets/ground_truth_held_out.json --no-llm --md docs/BENCHMARK-heldout.md`
+- Results: EMD 10/10 (100%), Deadline 9/10 (90%), Turnover 10/10 (100%), Exemption 10/10 (100%).
+- 1 honest miss on `Contractdocument66.pdf` (got '2026-10-08', want None).
 
 ### Known Failure Modes & Limitations
 1. **Unreadable text layers.** A page whose text layer is tofu/near-empty is reported in `skipped_pages`, excluded from analysis, and surfaced in the UI — never guessed at.

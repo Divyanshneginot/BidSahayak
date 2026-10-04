@@ -93,8 +93,14 @@ def run(repo: Path, use_llm: bool, only: str | None) -> dict:
         print("ground_truth.json not found — pass --gt <path>", file=sys.stderr)
         sys.exit(2)
     gt = json.loads(gt_path.read_text(encoding="utf-8"))
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(repo / ".env")
+        load_dotenv(repo.parent / ".env")
+    except Exception:
+        pass
 
-    key = (os.getenv("GEMINI_API_KEY") or os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")) if use_llm else None
+    key = (os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY") or os.getenv("GEMINI_API_KEY")) if use_llm else ""
     extractor = ExtractorAgent(api_key=key)
     ingest, textw = IngestWorker(), TextWorker()
 
@@ -113,8 +119,13 @@ def run(repo: Path, use_llm: bool, only: str | None) -> dict:
             txt = textw.process(str(pdf), tender_id=ing.tender_id)
             matrix = extractor.extract(txt)
             res = field_results(matrix, t)
-            row.update({"run": True, "latency_ms": round((time.time() - t0) * 1000),
-                        "fields": {k: {"ok": bool(v[0]), "got": v[1], "want": v[2]} for k, v in res.items()}})
+            row.update({
+                "run": True,
+                "tier": getattr(extractor, "last_tier", None),
+                "fallback_reason": getattr(extractor, "fallback_reason", None),
+                "latency_ms": round((time.time() - t0) * 1000),
+                "fields": {k: {"ok": bool(v[0]), "got": v[1], "want": v[2]} for k, v in res.items()}
+            })
             for k, v in res.items():
                 if v[0] == "ambiguous":
                     continue
@@ -175,17 +186,32 @@ def report(out: dict, quiet: bool) -> None:
 
 def to_markdown(out: dict) -> str:
     s = out["summary"]
+    gt_norm = re.sub(r"^.*?assets[/\\]", "assets/", out["ground_truth_path"]).replace("\\", "/")
     lines = [f"# Extraction benchmark", "",
              f"Generated `{s['generated']}` from commit `{s['git_head']}` · tier: **{s['tier']}** · "
              f"{s['n_documents']} documents.", "",
-             "Ground truth: `" + out["ground_truth_path"].split("/sample")[-1].lstrip("/") +
-             "` — read from the documents, never from the pipeline.", "",
+             f"Ground truth: `{gt_norm}` — read from the documents, never from the pipeline.", "",
              "| Field | Correct | Of | Accuracy | Threshold |", "|---|---|---|---|---|"]
     for k, v in s["per_field"].items():
         lines.append(f"| {k} | {v['correct']} | {v['of']} | {v['accuracy']:.0%} | {s['thresholds'][k]:.0%} |")
     if s["latency_ms"]["p50"]:
         lines += ["", f"Latency: p50 {s['latency_ms']['p50']} ms · p95 {s['latency_ms']['p95']} ms "
                       f"(single machine, {s['tier']} tier)."]
+    lines += ["", "## Document Results", "",
+              "| Document | Tier | EMD | Deadline | Turnover | Exemption | Time (s) |",
+              "|---|---|---|---|---|---|---|"]
+    for r in out["rows"]:
+        if r.get("run"):
+            f = r["fields"]
+            emd_str = "amb" if f["emd"]["ok"] == "ambiguous" else ("✓" if f["emd"]["ok"] else "✗")
+            dl_str = "amb" if f["deadline"]["ok"] == "ambiguous" else ("✓" if f["deadline"]["ok"] else "✗")
+            tv_str = "amb" if f["turnover"]["ok"] == "ambiguous" else ("✓" if f["turnover"]["ok"] else "✗")
+            ex_str = "amb" if f["exemption"]["ok"] == "ambiguous" else ("✓" if f["exemption"]["ok"] else "✗")
+            lat_s = f"{r.get('latency_ms', 0) / 1000:.2f}s"
+            tier_val = f"Tier {r.get('tier', 3)}"
+            lines.append(f"| `{r['file']}` | {tier_val} | {emd_str} | {dl_str} | {tv_str} | {ex_str} | {lat_s} |")
+        else:
+            lines.append(f"| `{r['file']}` | ERR | - | - | - | - | {r.get('error', '')[:20]} |")
     lines += ["", "## Misses", ""]
     misses = [(r["file"], k, v) for r in out["rows"] if r.get("run") for k, v in r["fields"].items()
               if not v["ok"] and v["ok"] != "ambiguous"]
