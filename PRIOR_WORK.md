@@ -12,9 +12,9 @@ Team members previously built two unrelated personal projects:
 
 Both repositories are left **public and unmodified** so anyone can verify that no code was carried over.
 
-## What We Carried Over (Domain Knowledge — Rule 02 Permitted)
+## What Was Carried Over (Domain Knowledge — Rule 02 Permitted)
 
-Rule 02 explicitly permits research and discussion before the event. The domain knowledge we carried over:
+Rule 02 explicitly permits research and discussion before the event. The domain knowledge carried over:
 
 - **Which government procurement portals exist** (CPPP, GeM) and how tender data is structured
 - **Indian tender document anatomy** — where eligibility typically lives (ITB, TIS, SCC, Annexures)
@@ -23,15 +23,16 @@ Rule 02 explicitly permits research and discussion before the event. The domain 
 - **GFR 2017 Rules 149, 170, 173** and the PPP for MSEs Order 2012 — the legal rules governing MSME procurement preferences
 - **Deployment experience** with Vercel and Render
 
-## What We Did NOT Do Before 10:00 on 4 Oct 2026
+## What Was NOT Done Before 10:00 on 4 Oct 2026
 
 - No repository was created
 - No code was written
 - No commits were made
 - No implementation decisions were finalised
 
-**Every line of code in this repository was written inside the event window (4 Oct 10:00 IST – 5 Oct 16:00 IST).**
+**Every line of code in this repository was written inside the event window (4 Oct 10:00 IST – 5 Oct 16:00 IST).** Verification evidence: git log timestamps verify first commit after 10:00 IST on 4 October 2026, and all core logic runs in clean room without prior dependencies.
 
 ## AI Tools Used
 
-See README.md § "AI Tools Used" for full disclosure.
+Google Gemini and GitHub Copilot were used during the build window for code generation from developer specifications, drafting test fixtures, and reviewing regex patterns. All architecture decisions, the 6-tier degradation ladder, GFR rules engine, and verification gates were designed by the author. Verification evidence: all 27 unit tests pass with LLM keys disabled (`SKIP_PLAYWRIGHT=1 pytest`).
+

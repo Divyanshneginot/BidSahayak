@@ -23,7 +23,7 @@ If it isn't in that chain, it doesn't exist.
 
 | Step | LLM or Code? | Why |
 |---|---|---|
-| PDF → text | **Code** (pypdf/pdfplumber, OCR fallback) | Deterministic, testable, free |
+| PDF → text | **Code** (pypdf, raster-scan detection) | Deterministic, testable, free |
 | Text → requirement fields | **LLM**, schema-constrained | Language is genuinely ambiguous across 40+ phrasings |
 | Fields → numbers/dates | **Code**, validating LLM output | Parse and reject anything that doesn't round-trip |
 | Compare vs vendor profile | **Code — pure function** | Must be 100% predictable and testable |
@@ -66,41 +66,24 @@ pytest tests/ -v
 
 > *Will be added at deployment (hour 20–24)*
 
-## Hit-Rate Table (14-Tender Verification Benchmark)
+## Benchmark Results (14-Tender Suite)
+Generated via `python scripts/benchmark.py --repo . --no-llm --md docs/BENCHMARK.md`:
 
-Across 14 real public tender documents spanning Works, Goods, Services, Hindi notices, and Scans:
+- **Suite**: 1 real seed tender (`imd-tender.pdf`) + 13 synthetic fixtures derived from GFR 2017 & state templates.
+- **Deterministic Tier Performance**:
+  - EMD Recovery: **12 / 14 (85.7%)**
+  - Exemption Detection: **13 / 14 (92.9%)**
+  - Latency: **p50 = 36.8 ms · p95 = 672.4 ms**
 
-| Parameter | Performance |
-|---|---|
-| Documents Evaluated | **14 / 14 (100%)** |
-| EMD Amount Recovery & Exemption Check | **14 / 14 (100%)** |
-| Submission Deadline Extracted | **14 / 14 (100%)** |
-| Zero Confident Hallucinations | **0 Confident Errors** (All unverified citations routed to human review) |
-| System Processing Latency | **< 3 seconds per tender** |
-
-```
-Evaluated 14 document(s):
-Document               | EMD Found          | Deadline     | Turnover        | Verdict
---------------------------------------------------------------------------------
-aiims_ppe_supply.pdf   | Rs.4,000,000       | 19-10-2026   | Not specified   | eligible
-bccl_coal_handling.p   | Rs.500,000         | 25-10-2026   | Not specified   | eligible
-cpwd_facility_manage   | Rs.60,000          | 25-10-2026   | Not specified   | eligible
-imd-tender.pdf         | Rs.10,000          | 01-07-2019   | Not specified   | eligible
-karnataka_jjm_water.   | Rs.200,000         | 15-10-2026   | Not specified   | eligible
-mtd_goods_nic.pdf      | Rs.100,000         | 24-10-2026   | Not specified   | eligible
-nhai_highway_toll.pd   | Rs.1,000,000       | 02-11-2026   | Not specified   | eligible
-nicsi_cloud_maintena   | Rs.100,000         | 30-10-2026   | Not specified   | eligible
-scanned_police_housi   | Rs.75,000          | 16-10-2026   | Not specified   | eligible
-smart_classroom_disp   | Rs.120,000         | 28-10-2026   | Not specified   | eligible
-tn_highways_short_de   | Rs.30,000          | 09-10-2026   | Not specified   | eligible
-upneda_solar_lights.   | Rs.80,000          | 22-10-2026   | Not specified   | eligible
-up_jal_nigam_hindi.p   | Rs.50,000          | 21-10-2026   | Not specified   | eligible
-up_pwd_road_works.pd   | Rs.150,000         | 18-10-2026   | Not specified   | eligible
-```
+### Known Failure Modes & Limitations
+1. **Scanned / Raster Documents**: Documents lacking a machine-readable text layer (`scanned_police_housing.pdf`) are flagged as unreadable pages and routed to human review rather than guessing.
+2. **Unstated Deadlines**: PSU documents that do not state a concrete bid submission date (`bccl_coal_handling.pdf`) correctly yield `None` rather than a hallucinated date.
+3. **Complex Multi-Year Turnover Clauses**: Complex turnover clauses requiring financial statement reconciliation require human confirmation.
+4. **Deterministic Resilience**: The app works out of the box with zero external LLM API keys via the deterministic fallback engine.
 
 ## Honest Limits
 
-- Sample size: 14 government tender PDFs
+- Sample size: 1 real seed tender + 13 representative fixtures
 - Audit data sources: CAG reports 2017–2026
 - Verdicts not validated against a real procurement decision
 - Rules encode GFR 2017 + PPP for MSEs 2012 as published; a tender may lawfully deviate

@@ -1,0 +1,114 @@
+{
+  "imd-tender.pdf": {
+    "emd_amount": 10000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2019-06-24",
+    "min_turnover": null,
+    "is_real": true,
+    "tender_ref": "NIT CPU/52/0519/9913"
+  },
+  "mtd_goods_nic.pdf": {
+    "emd_amount": 100000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-24",
+    "min_turnover": 2500000,
+    "is_real": false,
+    "tender_ref": "MTD Goods NIC V01"
+  },
+  "up_pwd_road_works.pdf": {
+    "emd_amount": 150000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-18",
+    "min_turnover": 4500000,
+    "is_real": false,
+    "tender_ref": "NIT 142/EE/PWD/2026"
+  },
+  "karnataka_jjm_water.pdf": {
+    "emd_amount": 200000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-15",
+    "min_turnover": 6000000,
+    "is_real": false,
+    "tender_ref": "JJM/RDWSD/2026/089"
+  },
+  "bccl_coal_handling.pdf": {
+    "emd_amount": 500000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": null,
+    "min_turnover": 10000000,
+    "is_real": false,
+    "tender_ref": "BCCL/CMC/2026/04"
+  },
+  "upneda_solar_lights.pdf": {
+    "emd_amount": 80000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-22",
+    "min_turnover": 2000000,
+    "is_real": false,
+    "tender_ref": "02/UPNEDA/SOLAR/2026"
+  },
+  "aiims_ppe_supply.pdf": {
+    "emd_amount": 40000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-19",
+    "min_turnover": 1500000,
+    "is_real": false,
+    "tender_ref": "AIIMS/HOSP/PPE/2026/11"
+  },
+  "smart_classroom_displays.pdf": {
+    "emd_amount": 120000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-28",
+    "min_turnover": 5000000,
+    "is_real": false,
+    "tender_ref": "SEIDC/EQUIP/2026/07"
+  },
+  "cpwd_facility_management.pdf": {
+    "emd_amount": 60000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-25",
+    "min_turnover": 3000000,
+    "is_real": false,
+    "tender_ref": "CPWD/NR/FAC/2026/19"
+  },
+  "nicsi_cloud_maintenance.pdf": {
+    "emd_amount": 100000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-30",
+    "min_turnover": 4000000,
+    "is_real": false,
+    "tender_ref": "NICSI/DATA-CTR/2026/41"
+  },
+  "up_jal_nigam_hindi.pdf": {
+    "emd_amount": 50000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-21",
+    "min_turnover": 2500000,
+    "is_real": false,
+    "tender_ref": "18/JAL-NIGAM/2026"
+  },
+  "scanned_police_housing.pdf": {
+    "emd_amount": 75000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-16",
+    "min_turnover": 3500000,
+    "is_real": false,
+    "tender_ref": "PHC/BARRACKS/2026/54"
+  },
+  "nhai_highway_toll.pdf": {
+    "emd_amount": 1000000,
+    "emd_exempt_for_mse": false,
+    "deadline_date": "2026-11-02",
+    "min_turnover": 20000000,
+    "is_real": false,
+    "tender_ref": "NHAI/TOLL/NH24/2026"
+  },
+  "tn_highways_short_deadline.pdf": {
+    "emd_amount": 30000,
+    "emd_exempt_for_mse": true,
+    "deadline_date": "2026-10-09",
+    "min_turnover": 1000000,
+    "is_real": false,
+    "tender_ref": "TN-HW/RESTORE/2026/09"
+  }
+}

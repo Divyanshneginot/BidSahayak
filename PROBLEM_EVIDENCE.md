@@ -1,7 +1,7 @@
 # PROBLEM_EVIDENCE.md — Empirical Problem Evidence & Audit Dossier
 
 > **Artefact for Track 01 (Agentic AI) — User Insight & Problem Evidence (15 pts) & Responsible Design (10 pts)**
-> Every number here derives directly from published Comptroller and Auditor General of India (CAG) audits, Union Budget 2026–27 policy directives, official GeM platform analytics, peer-reviewed procurement datasets, or our empirical measurement of 14 live tenders. Zero simulated interviews. Zero fabricated statistics.
+> Every number here derives directly from published Comptroller and Auditor General of India (CAG) audits, Union Budget 2026–27 policy directives, official GeM platform analytics, peer-reviewed procurement datasets, or the empirical 14-tender test suite. All citations verifiable against public records.
 
 ---
 
@@ -98,22 +98,20 @@ The Government of India has officially recognized that compliance paperwork lock
 
 ---
 
-## 4. Empirical 14-Document Live Measurement Summary
+## 4. Empirical 14-Document Test Suite Summary
 
-To ground the audit literature in current reality, our team analyzed **14 active tender documents** downloaded on 4 October 2026 from CPPP (`eprocure.gov.in`) and GeM across works, goods, and services (including scanned image-only and bilingual notices).
+To ground the audit literature in concrete document structures, BidSahayak evaluates against a 14-document test suite composed of one seed public tender (`imd-tender.pdf`, IMD NIT CPU/52/0519/9913) and 13 synthetic fixtures modelled directly on Central and State procurement templates (GFR 2017, CPWD manual, GeM guidelines, and bilingual notices).
 
-| Measurement Parameter | Observed Value | Significance |
+| Measurement Parameter | Observed Pattern | Practical Significance |
 |---|---|---|
-| Sample Size ($N$) | **14 live tender documents** | Real CPPP & GeM procurement notices |
-| Mean Document Length | **34.2 pages** (range: 12 to 68 pages) | Impassable cognitive burden for small business owners |
-| Dispersal of Eligibility Conditions | **Mean 4.1 separate sections** per tender | Conditions scattered across ITB, TIS, SCC, and Annexures |
-| EMD Clause Separation | **100% of tenders (14/14)** | Exemption stated in separate clause (avg 5.8 pages away from EMD fee) |
-| Tender Submission Window | **Mean 11.4 days** (range: 4 to 21 days) | Compressed window |
-| Short Submission Deadlines ($\le 6$ days) | **28.6% (4 of 14 tenders)** | Shorter than Class 3 DSC issue latency (3–7 days) |
-| Machine-Readability Failure | **14.3% (2 of 14 tenders)** | Scanned raster image PDFs with zero text layer (mandating OCR) |
+| Test Suite Composition | **1 public tender + 13 synthetic fixtures** | Verifies canonical clauses across Works, Goods, and Services |
+| Dispersal of Eligibility Conditions | **Multiple separate sections** per tender | Conditions scattered across ITB, TIS, SCC, and technical annexures |
+| EMD Clause Separation | **Clause 5 vs Clause 6(a)** in IMD tender | Exemption stated in a separate sub-clause, requiring cross-clause reconciliation |
+| Compressed Deadlines | **Tight submission windows** in state works | Some tenders allow fewer days than standard DSC issuance latency |
+| Bilingual & Formatting Variation | **English, Hindi, and raster scans** | Exercises Devanagari normalization and fallback routing |
 
 ### The Compounding Arithmetic of Exclusion
-Under CPPP rules, bidding requires a Class 3 Digital Signature Certificate (DSC), which Certifying Authorities take **3 to 7 days** to issue. When 28.6% of tenders allow $\le 6$ days and 30.06% of Haryana tenders allow $<7$ days, a first-time bidder is **mathematically excluded before reading page 2**.
+Under CPPP rules, bidding requires a Class 3 Digital Signature Certificate (DSC), which Certifying Authorities typically take **3 to 7 days** to issue. When state tenders allow short windows and 30.06% of Haryana tenders allow $<7$ days, a first-time bidder without an existing DSC is excluded before completing the paperwork.
 
 ---
 
