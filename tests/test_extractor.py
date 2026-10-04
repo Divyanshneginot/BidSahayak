@@ -49,3 +49,111 @@ def test_inr_parser_variants():
     assert parse("₹ 2.5 Cr") == 25000000
     assert parse("500000") == 500000
     assert parse("") is None
+
+
+def test_page_aware_chunking_retrieval_40_pages():
+    """Verify that a 40-page tender has critical clauses retrieved with page preservation."""
+    from src.text_extract import PageText, ExtractionResult
+    pages = {}
+    for p in range(1, 41):
+        if p == 1:
+            text = "NIT No: PWD/2026/01. Notice Inviting Tender for Road Construction."
+        elif p == 15:
+            text = "Clause 15.1: Earnest Money Deposit (EMD) of Rs. 5,00,000 payable by bidder."
+        elif p == 28:
+            text = "Clause 28: Minimum average annual turnover of Rs 2 Crore in last 3 financial years."
+        elif p == 35:
+            text = "Clause 35: Micro and Small enterprises are exempted from EMD under GFR 170."
+        else:
+            text = f"General conditions of contract page {p}. " * 60  # Boilerplate filler
+        pages[p] = PageText(
+            page_number=p,
+            raw_text=text,
+            normalized_text=text,
+            char_count=len(text),
+            is_scanned_likely=False,
+        )
+
+    er = ExtractionResult(
+        tender_id="TND-40P",
+        total_pages=40,
+        pages=pages,
+        full_text="\n".join(p.normalized_text for p in pages.values()),
+        is_scanned_document=False,
+    )
+
+    retrieved = ExtractorAgent._retrieve_relevant_sections(er, max_chars=12000)
+    assert "--- PAGE 1 ---" in retrieved
+    assert "--- PAGE 15 ---" in retrieved
+    assert "--- PAGE 28 ---" in retrieved
+    assert "--- PAGE 35 ---" in retrieved
+    assert "Earnest Money Deposit (EMD)" in retrieved
+    assert "turnover of Rs 2 Crore" in retrieved
+
+
+def test_agent_repair_loop_on_citation_failure():
+    """Test that agent loop calls REPAIR_PROMPT_TEMPLATE when citation verification fails."""
+    from src.text_extract import PageText, ExtractionResult
+
+    p1_text = "Tender 101. EMD is Rs. 50,000 payable to director."
+    pages = {
+        1: PageText(page_number=1, raw_text=p1_text, normalized_text=p1_text, char_count=len(p1_text), is_scanned_likely=False)
+    }
+    er = ExtractionResult(
+        tender_id="TND-REP",
+        total_pages=1,
+        pages=pages,
+        full_text=p1_text,
+        is_scanned_document=False,
+    )
+
+    agent = ExtractorAgent(api_key="test-mock-key")
+    call_count = 0
+
+    def mock_call_llm(prompt_text):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            # First attempt: hallucinated snippet
+            return {
+                "tender_id": "TND-REP",
+                "title": "Test Tender",
+                "emd_amount": 50000,
+                "evidence_fields": {
+                    "emd_amount": {
+                        "field_name": "emd_amount",
+                        "value_raw": "50000",
+                        "value_normalised": 50000,
+                        "confidence": 0.95,
+                        "source_page": 1,
+                        "source_snippet": "This snippet does not exist on page 1 anywhere!",
+                    }
+                }
+            }
+        else:
+            # Second attempt (repair): correct verbatim snippet
+            return {
+                "tender_id": "TND-REP",
+                "title": "Test Tender",
+                "emd_amount": 50000,
+                "evidence_fields": {
+                    "emd_amount": {
+                        "field_name": "emd_amount",
+                        "value_raw": "Rs. 50,000",
+                        "value_normalised": 50000,
+                        "confidence": 0.95,
+                        "source_page": 1,
+                        "source_snippet": "EMD is Rs. 50,000 payable to director.",
+                    }
+                }
+            }
+
+    agent._call_llm = mock_call_llm
+    matrix = agent.extract(er)
+
+    assert call_count == 2
+    assert agent.last_tier == 1
+    assert any(step["step"] == "repair_prompt_call" for step in agent.audit_trace)
+    assert any(step["step"] == "citation_verification" and step["status"] == "PASS" for step in agent.audit_trace)
+    assert matrix.emd_amount == 50000
+

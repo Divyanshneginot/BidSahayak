@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 from typing import Optional
@@ -9,6 +10,7 @@ from src.models import (
 )
 
 IST = ZoneInfo("Asia/Kolkata")
+CONFIDENCE_THRESHOLD = float(os.getenv("CONFIDENCE_THRESHOLD", "0.7"))
 
 
 def calculate_effective_turnover(turnovers: list[int]) -> int:
@@ -18,7 +20,7 @@ def calculate_effective_turnover(turnovers: list[int]) -> int:
     return int(sum(turnovers) / len(turnovers))
 
 
-def evaluate_dsc_timing(deadline: datetime, holds_dsc: bool) -> str:
+def evaluate_dsc_timing(deadline: datetime, holds_dsc: bool, now: Optional[datetime] = None) -> str:
     """
     Evaluates whether vendor can obtain Class 3 DSC before deadline.
     Under CPPP guidance, obtaining a new Class 3 DSC takes 3-7 days.
@@ -30,7 +32,10 @@ def evaluate_dsc_timing(deadline: datetime, holds_dsc: bool) -> str:
         return "met"
     if deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=IST)
-    now = datetime.now(deadline.tzinfo)
+    if now is None:
+        now = datetime.now(deadline.tzinfo)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=deadline.tzinfo)
     days = (deadline - now).total_seconds() / 86400.0
     return "gap_impossible" if days < 7.0 else "gap_addressable"
 
@@ -40,6 +45,7 @@ def evaluate(
     profile: VendorProfile,
     current_time: Optional[datetime] = None,
 ) -> BidVerdict:
+
     """
     Pure deterministic comparison engine.
     Compares RequirementMatrix against VendorProfile according to:
@@ -54,9 +60,9 @@ def evaluate(
     low_confidence_fields: list[str] = []
     audit_log: list[dict] = []
 
-    # 1. Identify low-confidence fields (< 0.7)
+    # 1. Identify low-confidence fields (< CONFIDENCE_THRESHOLD)
     for field_name, evidence in matrix.evidence_fields.items():
-        if evidence.confidence < 0.7:
+        if evidence.confidence < CONFIDENCE_THRESHOLD:
             low_confidence_fields.append(field_name)
             audit_log.append({
                 "action": "flag_low_confidence",
@@ -64,6 +70,7 @@ def evaluate(
                 "confidence": evidence.confidence,
                 "snippet": evidence.source_snippet,
             })
+
 
     # 2. EMD / Bid Security Evaluation
     if matrix.emd_amount and matrix.emd_amount > 0:
@@ -255,7 +262,65 @@ def evaluate(
             verdicts.append(verdict)
             gaps.append(verdict)
 
-    # 6. Submission Deadline & Class 3 DSC Timing Barrier (Original CAG/CPPP insight)
+    # 5. Similar Work Experience Evaluation (% of estimated cost or explicit minimum)
+    required_similar_work = None
+    if getattr(matrix, "similar_work_min_value", None) and matrix.similar_work_min_value > 0:
+        required_similar_work = matrix.similar_work_min_value
+    elif (
+        getattr(matrix, "estimated_cost", None)
+        and getattr(matrix, "similar_work_percent", None)
+        and matrix.similar_work_percent > 0
+    ):
+        required_similar_work = int(matrix.estimated_cost * (matrix.similar_work_percent / 100.0))
+
+    if required_similar_work:
+        req_name = "Similar Work Experience"
+        ev_desc = f"Single completed work of ₹{required_similar_work:,}"
+        if getattr(matrix, "similar_work_percent", None) and getattr(matrix, "estimated_cost", None):
+            ev_desc += f" ({matrix.similar_work_percent}% of estimated cost ₹{matrix.estimated_cost:,})"
+
+        if profile.past_work_max_value >= required_similar_work:
+            verdicts.append(RequirementVerdict(
+                requirement=req_name,
+                status="met",
+                reason=f"Vendor's largest past work of ₹{profile.past_work_max_value:,} meets required ₹{required_similar_work:,}.",
+                evidence=ev_desc,
+            ))
+        else:
+            v = RequirementVerdict(
+                requirement=req_name,
+                status="gap",
+                reason=f"Vendor largest past work ₹{profile.past_work_max_value:,} is below required ₹{required_similar_work:,}.",
+                evidence=ev_desc,
+                remedy="Partner via joint venture / consortium or furnish additional qualifying completion certificates.",
+            )
+            verdicts.append(v)
+            gaps.append(v)
+
+    # 6. Minimum Net Worth Evaluation
+    if getattr(matrix, "min_net_worth", None) and matrix.min_net_worth > 0:
+        req_name = "Minimum Net Worth"
+        ev_desc = f"₹{matrix.min_net_worth:,}"
+        if getattr(profile, "net_worth", None) is not None and profile.net_worth >= matrix.min_net_worth:
+            verdicts.append(RequirementVerdict(
+                requirement=req_name,
+                status="met",
+                reason=f"Vendor net worth of ₹{profile.net_worth:,} meets required ₹{matrix.min_net_worth:,}.",
+                evidence=ev_desc,
+            ))
+        else:
+            nw_str = f"₹{profile.net_worth:,}" if getattr(profile, "net_worth", None) is not None else "Not provided"
+            v = RequirementVerdict(
+                requirement=req_name,
+                status="gap",
+                reason=f"Vendor net worth ({nw_str}) is below mandatory ₹{matrix.min_net_worth:,}.",
+                evidence=ev_desc,
+                remedy="Submit Chartered Accountant Net Worth Certificate or strengthen audited balance sheet.",
+            )
+            verdicts.append(v)
+            gaps.append(v)
+
+    # 7. Submission Deadline & Class 3 DSC Timing Barrier (Original CAG/CPPP insight)
     days_to_deadline: Optional[int] = None
     participation_impossible = False
     impossible_reason = None
@@ -269,20 +334,34 @@ def evaluate(
         diff = deadline - cmp_now
         days_to_deadline = max(0, int(diff.total_seconds() / 86400.0))
 
-        if matrix.requires_class3_dsc:
-            dsc_status = evaluate_dsc_timing(deadline, profile.holds_class3_dsc)
+        if diff.total_seconds() < 0:
+            participation_impossible = True
+            impossible_reason = (
+                f"Tender submission deadline has passed ({deadline.strftime('%d-%m-%Y %H:%M %Z')}). "
+                "Tender is closed for bidding."
+            )
+            verdict = RequirementVerdict(
+                requirement="Submission Deadline",
+                status="gap",
+                reason=impossible_reason,
+                remedy="Tender is closed. Submission no longer permitted.",
+            )
+            verdicts.append(verdict)
+            gaps.append(verdict)
+        elif matrix.requires_class3_dsc:
+            dsc_status = evaluate_dsc_timing(deadline, profile.holds_class3_dsc, now=cmp_now)
             if dsc_status == "gap_impossible":
                 participation_impossible = True
                 impossible_reason = (
                     f"A new Class 3 DSC takes 3–7 days to issue (official CPPP guidance). "
-                    f"This tender closes in {days_to_deadline} days. Unless vendor already possesses "
-                    "a valid DSC token, bid submission is mathematically impossible."
+                    f"This tender closes in {days_to_deadline} days. Vendor lacks Class 3 DSC, "
+                    "so issuance cannot be completed before the deadline."
                 )
                 verdict = RequirementVerdict(
                     requirement="Class 3 Digital Signature Certificate (DSC)",
                     status="gap",
                     reason=impossible_reason,
-                    remedy="Immediate emergency issuance of Class 3 DSC token via e-Mudhra or (n)Code.",
+                    remedy="apply immediately — issuance takes 3–7 days",
                 )
                 verdicts.append(verdict)
                 gaps.append(verdict)
@@ -291,7 +370,7 @@ def evaluate(
                     requirement="Class 3 Digital Signature Certificate (DSC)",
                     status="gap",
                     reason=f"Vendor lacks Class 3 DSC. Tender closes in {days_to_deadline} days.",
-                    remedy="Apply for Class 3 DSC immediately (takes 3-5 business days).",
+                    remedy="apply immediately — issuance takes 3–7 days",
                 )
                 verdicts.append(verdict)
                 gaps.append(verdict)
@@ -302,7 +381,7 @@ def evaluate(
                     reason="Vendor holds valid Class 3 DSC required for e-procurement portal.",
                 ))
 
-    # 7. Overall Verdict Determination
+    # 8. Overall Verdict Determination
     is_empty_matrix = (
         len(matrix.evidence_fields) == 0
         and matrix.emd_amount is None
@@ -310,6 +389,8 @@ def evaluate(
         and matrix.submission_deadline is None
         and matrix.min_years_experience is None
         and not matrix.required_certifications
+        and getattr(matrix, "similar_work_min_value", None) is None
+        and getattr(matrix, "min_net_worth", None) is None
     )
     unresolved_fields = getattr(matrix, "unresolved_fields", [])
 
@@ -318,12 +399,19 @@ def evaluate(
     for g in gaps:
         if "Class 3" in g.requirement and participation_impossible:
             blocking_gaps.append(g)
-        elif g.requirement in ["Annual Turnover", "Experience (Years in Business)"]:
+        elif g.requirement in [
+            "Annual Turnover",
+            "Experience (Years in Business)",
+            "Similar Work Experience",
+            "Minimum Net Worth",
+            "Submission Deadline",
+        ]:
             blocking_gaps.append(g)
         elif g.requirement == "Mandatory Certifications":
             blocking_gaps.append(g)
         else:
             addressable_gaps.append(g)
+
 
     if is_empty_matrix:
         overall = "needs-human-review"

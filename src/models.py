@@ -33,6 +33,10 @@ class RequirementMatrix(BaseModel):
     min_years_experience: Optional[int] = None
     required_certifications: list[str] = Field(default_factory=list)
     required_past_work: list[PastWorkRequirement] = Field(default_factory=list)
+    estimated_cost: Optional[int] = None
+    similar_work_percent: Optional[float] = None
+    similar_work_min_value: Optional[int] = None
+    min_net_worth: Optional[int] = None
     submission_deadline: Optional[datetime] = None
     technical_bid_date: Optional[datetime] = None
     financial_bid_date: Optional[datetime] = None
@@ -57,8 +61,10 @@ class VendorProfile(BaseModel):
     certifications_held: list[str] = Field(default_factory=list)
     past_work_count: int = 0
     past_work_max_value: int = 0
+    net_worth: Optional[int] = None
     holds_class3_dsc: bool = True
     startup_india: bool = False
+
 
 
 class RequirementVerdict(BaseModel):

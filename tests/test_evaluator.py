@@ -161,3 +161,89 @@ def test_confidence_gating_triggers_human_review(base_matrix, eligible_micro_pro
     assert verdict.overall == "needs-human-review"
     assert "min_turnover" in verdict.low_confidence_fields
     assert len(verdict.audit_log) > 0
+
+
+def test_evaluate_dsc_timing_custom_now():
+    """Verify evaluate_dsc_timing strictly uses custom passed now."""
+    from zoneinfo import ZoneInfo
+    from src.evaluator import evaluate_dsc_timing
+    ist = ZoneInfo("Asia/Kolkata")
+    now_ref = datetime(2026, 11, 1, 10, 0, tzinfo=ist)
+    
+    # Exactly 7 days -> gap_addressable
+    deadline_7d = now_ref + timedelta(days=7)
+    assert evaluate_dsc_timing(deadline_7d, holds_dsc=False, now=now_ref) == "gap_addressable"
+
+    # 6.9 days -> gap_impossible
+    deadline_6d = now_ref + timedelta(days=6, hours=23)
+    assert evaluate_dsc_timing(deadline_6d, holds_dsc=False, now=now_ref) == "gap_impossible"
+
+    # Already holds DSC -> met
+    assert evaluate_dsc_timing(deadline_6d, holds_dsc=True, now=now_ref) == "met"
+
+
+def test_tender_closed_verdict_past_deadline(base_matrix, eligible_micro_profile):
+    """Verify past deadline produces tender closed verdict and not-eligible."""
+    from zoneinfo import ZoneInfo
+    ist = ZoneInfo("Asia/Kolkata")
+    now_ref = datetime(2026, 11, 1, 12, 0, tzinfo=ist)
+    base_matrix.submission_deadline = now_ref - timedelta(days=1)
+    
+    verdict = evaluate(base_matrix, eligible_micro_profile, current_time=now_ref)
+    assert verdict.participation_impossible is True
+    assert "deadline has passed" in verdict.impossible_reason
+    assert verdict.overall == "not-eligible"
+    dl_v = next(v for v in verdict.verdicts if v.requirement == "Submission Deadline")
+    assert dl_v.status == "gap"
+    assert "closed" in dl_v.remedy.lower()
+
+
+def test_dsc_accurate_wording(base_matrix, eligible_micro_profile):
+    """Verify accurate wording for DSC issuance replacing 'mathematically impossible'."""
+    from zoneinfo import ZoneInfo
+    ist = ZoneInfo("Asia/Kolkata")
+    now_ref = datetime(2026, 11, 1, 12, 0, tzinfo=ist)
+    base_matrix.submission_deadline = now_ref + timedelta(days=4)
+    eligible_micro_profile.holds_class3_dsc = False
+
+    verdict = evaluate(base_matrix, eligible_micro_profile, current_time=now_ref)
+    assert "mathematically impossible" not in verdict.impossible_reason
+    assert "Vendor lacks Class 3 DSC, so issuance cannot be completed" in verdict.impossible_reason
+
+
+def test_similar_work_experience_checks(base_matrix, eligible_micro_profile):
+    """Verify similar work experience check based on percentage of estimated cost."""
+    base_matrix.estimated_cost = 10000000  # 1 Crore
+    base_matrix.similar_work_percent = 50.0  # 50% = 50 Lakhs
+
+    # Vendor past work = 60 Lakhs -> met
+    eligible_micro_profile.past_work_max_value = 6000000
+    v1 = evaluate(base_matrix, eligible_micro_profile)
+    sw1 = next(v for v in v1.verdicts if v.requirement == "Similar Work Experience")
+    assert sw1.status == "met"
+
+    # Vendor past work = 30 Lakhs -> gap
+    eligible_micro_profile.past_work_max_value = 3000000
+    v2 = evaluate(base_matrix, eligible_micro_profile)
+    sw2 = next(v for v in v2.verdicts if v.requirement == "Similar Work Experience")
+    assert sw2.status == "gap"
+    assert v2.overall == "not-eligible"
+
+
+def test_minimum_net_worth_checks(base_matrix, eligible_micro_profile):
+    """Verify minimum net worth evaluation."""
+    base_matrix.min_net_worth = 2500000  # 25 Lakhs
+
+    # Met
+    eligible_micro_profile.net_worth = 3000000
+    v1 = evaluate(base_matrix, eligible_micro_profile)
+    nw1 = next(v for v in v1.verdicts if v.requirement == "Minimum Net Worth")
+    assert nw1.status == "met"
+
+    # Gap
+    eligible_micro_profile.net_worth = 1500000
+    v2 = evaluate(base_matrix, eligible_micro_profile)
+    nw2 = next(v for v in v2.verdicts if v.requirement == "Minimum Net Worth")
+    assert nw2.status == "gap"
+    assert v2.overall == "not-eligible"
+
