@@ -800,10 +800,60 @@ footer.site :focus-visible{outline-color:#f5f5f5}
         </button>
         <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
         <div id="uploadFeedback" class="upload-feedback" role="alert" aria-live="assertive" style="display:none"></div>
-        <div class="profile-banner" id="profileBanner">
-          <span class="profile-tag" data-i18n="prof.tag">Evaluation Profile</span>
-          <span class="profile-text" data-i18n="prof.text">Sample MSME Profile: Micro Enterprise · Udyam registered · ₹4.2 Cr 3-yr turnover · Class-3 DSC held (custom profile setup coming soon)</span>
-        </div>
+        
+        <!-- Vendor Profile Configuration Panel (F13/G14) -->
+        <details class="doc-card" id="profilePanel" style="margin-top:1rem;border:1px solid var(--line);background:var(--paper)">
+          <summary class="doc-head" style="cursor:pointer;user-select:none;display:flex;justify-content:space-between;align-items:center;padding:.6rem .9rem;font-family:var(--mono);font-size:.68rem">
+            <span style="font-weight:700" data-i18n="prof.tag">VENDOR PROFILE (MSME CONFIG)</span>
+            <span id="profileAgeWarn" style="color:var(--status-miss);display:none;font-weight:700">⚠️ Profile older than 90 days</span>
+          </summary>
+          <div class="doc-body" style="padding:1rem;display:grid;grid-template-columns:1fr 1fr;gap:.8rem;font-size:.82rem">
+            <div>
+              <label for="pfName" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Business Name</label>
+              <input type="text" id="pfName" value="Sahayak Tech Solutions" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
+              <label for="pfUdyam" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Udyam Tier</label>
+              <select id="pfUdyam" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+                <option value="Micro" selected>Micro</option>
+                <option value="Small">Small</option>
+                <option value="Medium">Medium</option>
+                <option value="">None / Not Registered</option>
+              </select>
+            </div>
+            <div>
+              <label for="pfUdyamValid" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Udyam Valid Until</label>
+              <input type="date" id="pfUdyamValid" value="2027-03-31" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
+              <label for="pfState" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">State</label>
+              <input type="text" id="pfState" value="Uttar Pradesh" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
+              <label for="pfTurnover" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">3-Yr Annual Turnover (in ₹)</label>
+              <input type="text" id="pfTurnover" value="42000000" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
+              <label for="pfYears" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Years in Business</label>
+              <input type="number" id="pfYears" value="5" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
+              <label style="display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.75rem;margin-top:.6rem">
+                <input type="checkbox" id="pfDsc" checked> Holds Class-3 DSC
+              </label>
+            </div>
+            <div>
+              <label style="display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.75rem;margin-top:.6rem">
+                <input type="checkbox" id="pfTrader"> Registered as Trader (not mfg)
+              </label>
+            </div>
+            <div style="grid-column:1/-1">
+              <label for="pfCerts" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Certifications Held (comma separated)</label>
+              <input type="text" id="pfCerts" value="ISO 9001, MSME" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+          </div>
+        </details>
+
         <div class="upload-or" data-i18n="dz.or">no tender at hand?</div>
         <a class="btn btn-primary" href="#demo" id="workedBtn"><span data-i18n="dz.worked">Run the worked example</span><span class="arrow" aria-hidden="true">→</span></a>
       </div>
@@ -1290,10 +1340,72 @@ never do</h2>
     if(h)h.textContent=dict[cur]["dz.hint"]||"PDF · up to 25 MB · English or Hindi · scanned copies OK";
   }
 
+  var currentSession = null;
+
+  function getVendorProfile(){
+    var pfT = $("#pfTurnover") ? $("#pfTurnover").value : "42000000";
+    var turnovers = pfT.split(",").map(function(s){return parseInt(s.trim())||0}).filter(function(n){return n>0});
+    if(!turnovers.length) turnovers = [42000000];
+    var certs = ($("#pfCerts") ? $("#pfCerts").value : "ISO 9001, MSME").split(",").map(function(s){return s.trim()}).filter(Boolean);
+    return {
+      business_name: $("#pfName") ? $("#pfName").value : "Sahayak Tech Solutions",
+      state: $("#pfState") ? $("#pfState").value : "Uttar Pradesh",
+      udyam_classification: ($("#pfUdyam") && $("#pfUdyam").value) ? $("#pfUdyam").value : null,
+      udyam_valid_until: ($("#pfUdyamValid") && $("#pfUdyamValid").value) ? $("#pfUdyamValid").value : null,
+      udyam_covers_tender_item: true,
+      is_manufacturing: !($("#pfTrader") && $("#pfTrader").checked),
+      is_trading: !!($("#pfTrader") && $("#pfTrader").checked),
+      annual_turnover_last_3y: turnovers,
+      years_in_business: $("#pfYears") ? parseInt($("#pfYears").value)||0 : 5,
+      certifications_held: certs,
+      holds_class3_dsc: !!($("#pfDsc") && $("#pfDsc").checked),
+      startup_india: false
+    };
+  }
+
+  function saveVendorProfile(){
+    try {
+      var p = getVendorProfile();
+      p._saved_at = Date.now();
+      localStorage.setItem("bs-profile", JSON.stringify(p));
+    } catch(e){}
+  }
+
+  function loadVendorProfile(){
+    try {
+      var raw = localStorage.getItem("bs-profile");
+      if(!raw) return;
+      var p = JSON.parse(raw);
+      if(p._saved_at && (Date.now() - p._saved_at > 90 * 86400 * 1000)){
+        var w = $("#profileAgeWarn");
+        if(w) w.style.display = "inline";
+      }
+      if(p.business_name && $("#pfName")) $("#pfName").value = p.business_name;
+      if(p.udyam_classification && $("#pfUdyam")) $("#pfUdyam").value = p.udyam_classification;
+      if(p.udyam_valid_until && $("#pfUdyamValid")) $("#pfUdyamValid").value = p.udyam_valid_until;
+      if(p.state && $("#pfState")) $("#pfState").value = p.state;
+      if(p.years_in_business != null && $("#pfYears")) $("#pfYears").value = p.years_in_business;
+      if($("#pfTrader")) $("#pfTrader").checked = !!p.is_trading;
+      if($("#pfDsc")) $("#pfDsc").checked = p.holds_class3_dsc !== false;
+      if(p.certifications_held && $("#pfCerts")) $("#pfCerts").value = p.certifications_held.join(", ");
+      if(p.annual_turnover_last_3y && $("#pfTurnover")) $("#pfTurnover").value = p.annual_turnover_last_3y.join(", ");
+    } catch(e){}
+  }
+  loadVendorProfile();
+  var pan = $("#profilePanel");
+  if(pan) {
+    ["change","input"].forEach(function(ev){ pan.addEventListener(ev, saveVendorProfile); });
+  }
+
   function renderLiveAssessment(data){
     if(!data)return;
     var kicker=$("[data-i18n='res.kicker']");
-    if(kicker)kicker.textContent="Verdict · "+(data.tender_id||"UPLOADED TENDER")+" · Live Assessment";
+    if(data.verdict && data.verdict.overall){
+      var biz = (data.profile && data.profile.business_name) || getVendorProfile().business_name || "Sahayak Tech Solutions";
+      if(kicker) kicker.textContent="Verdict · "+(data.tender_id||"UPLOADED TENDER")+" · "+biz;
+    } else {
+      if(kicker) kicker.textContent="Extraction only — add your profile";
+    }
 
     if(data.verdict){
       var v=data.verdict;
@@ -1337,7 +1449,7 @@ never do</h2>
               '<div class="req-name"><span>'+esc(row.requirement||"Requirement")+'</span><small>'+esc(row.reason||"")+'</small></div>'+
               '<div class="req-quote">'+(row.evidence?'<span class="pg">Live</span>'+esc(row.evidence):'<span class="pg">Clause</span>Extracted field')+'</div>'+
               '<div><span class="status '+statusClass+'">'+statusLabel+'</span>'+
-              '<button class="approve-mini" aria-pressed="false" style="margin-top:.5rem">Approve</button></div>';
+              '<button class="approve-mini" data-req="'+esc(row.requirement||"")+'" aria-pressed="false" style="margin-top:.5rem">Approve</button></div>';
             table.appendChild(rowEl);
           });
           var vmB=$$(".verdict-meta .vm b")[1];
@@ -1347,9 +1459,45 @@ never do</h2>
           minis.forEach(function(b){
             b.addEventListener("click",function(){
               var p=b.getAttribute("aria-pressed")==="true";
-              b.setAttribute("aria-pressed",String(!p));
-              b.textContent=!p?(dict[cur].approveDone||"Approved ✓"):(dict[cur].approve||"Approve");
-              refresh();
+              if(!p && currentSession && (currentSession.matrix || currentSession.extraction_matrix)){
+                var matrixObj = currentSession.matrix || currentSession.extraction_matrix;
+                var reqName = b.getAttribute("data-req") || "Requirement";
+                fetch("/api/assess/override", {
+                  method: "POST",
+                  headers: {"Content-Type": "application/json"},
+                  body: JSON.stringify({
+                    matrix: matrixObj,
+                    profile: getVendorProfile(),
+                    field_name: reqName,
+                    override_note: "Approved by human operator"
+                  })
+                })
+                .then(function(r){ return r.ok ? r.json() : null; })
+                .then(function(newVerdict){
+                  b.setAttribute("aria-pressed","true");
+                  b.textContent=dict[cur].approveDone||"Approved ✓";
+                  var pill=document.createElement("span");
+                  pill.className="status met";
+                  pill.style.fontSize=".65rem";
+                  pill.style.marginLeft=".4rem";
+                  pill.textContent="Audited ✓";
+                  b.parentNode.appendChild(pill);
+                  if(newVerdict){
+                    currentSession.verdict = newVerdict;
+                    renderLiveAssessment(currentSession);
+                  }
+                  refresh();
+                })
+                .catch(function(){
+                  b.setAttribute("aria-pressed","true");
+                  b.textContent=dict[cur].approveDone||"Approved ✓";
+                  refresh();
+                });
+              } else {
+                b.setAttribute("aria-pressed",String(!p));
+                b.textContent=!p?(dict[cur].approveDone||"Approved ✓"):(dict[cur].approve||"Approve");
+                refresh();
+              }
             });
           });
           refresh();
@@ -1384,6 +1532,7 @@ never do</h2>
     fi.value="";
     var ac=new AbortController(),to=setTimeout(function(){ac.abort()},90000);
 
+    // Call 1: Supervisor process (ingest -> text -> extract)
     fetch("/api/assess/process",{method:"POST",body:fd,signal:ac.signal})
       .then(function(r){
         if(!r.ok){
@@ -1393,13 +1542,34 @@ never do</h2>
         }
         return r.json();
       })
-      .then(function(data){
-        clearTimeout(to);
-        dz.removeAttribute("aria-busy");
-        if(hintEl)hintEl.textContent=dict[cur]["dz.success"]||"Assessment complete ✓ (Live tender data loaded)";
-        renderLiveAssessment(data);
-        var r=$("#result");
-        if(r)r.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+      .then(function(sessionData){
+        currentSession = sessionData;
+        var prof = getVendorProfile();
+        saveVendorProfile();
+        var mat = sessionData.matrix || sessionData.extraction_matrix || sessionData;
+        
+        // Call 2: Deterministic evaluation against user's profile (F14/G14)
+        return fetch("/api/assess/evaluate", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({matrix: mat, profile: prof})
+        })
+        .then(function(evRes){
+          if(evRes.ok) return evRes.json();
+          return null;
+        })
+        .then(function(verdictData){
+          if(verdictData){
+            currentSession.verdict = verdictData;
+            currentSession.profile = prof;
+          }
+          clearTimeout(to);
+          dz.removeAttribute("aria-busy");
+          if(hintEl)hintEl.textContent=dict[cur]["dz.success"]||"Assessment complete ✓ (Live tender data loaded)";
+          renderLiveAssessment(currentSession);
+          var r=$("#result");
+          if(r)r.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+        });
       })
       .catch(function(err){
         clearTimeout(to);
@@ -1610,13 +1780,15 @@ never do</h2>
   }};
   var cur="en", langTgl=$("#langTgl");
 
-  // Pre-populate dict.en from initial English DOM markup so two-way toggle works 100%!
+  // Lossless English snapshot via dataset.en on initialization (F18/G18)
   $$("[data-i18n]").forEach(function(el){
     var k=el.getAttribute("data-i18n");
+    if(!el.dataset.en) el.dataset.en=el.innerHTML;
     if(!dict.en[k]) dict.en[k]=el.innerHTML.replace(/<br\s*[\/]?>/gi, "\n");
   });
   $$("[data-i18n-html]").forEach(function(el){
     var k=el.getAttribute("data-i18n-html");
+    if(!el.dataset.en) el.dataset.en=el.innerHTML;
     if(!dict.en[k]) dict.en[k]=el.innerHTML;
   });
 
@@ -1630,14 +1802,23 @@ never do</h2>
       hiPill.classList.toggle("active", l==="hi");
     }
     document.documentElement.setAttribute("lang", l==="hi"?"hi":"en");
-    $$("[data-i18n]").forEach(function(el){
-      var k=el.getAttribute("data-i18n");
-      if(dict[l] && dict[l][k]!=null){el.innerHTML=dict[l][k].replace(/\n/g,"<br>");}
-    });
-    $$("[data-i18n-html]").forEach(function(el){
-      var k=el.getAttribute("data-i18n-html");
-      if(dict[l] && dict[l][k]!=null){el.innerHTML=dict[l][k];}
-    });
+    if(l==="en"){
+      $$("[data-i18n]").forEach(function(el){
+        if(el.dataset.en) el.innerHTML=el.dataset.en;
+      });
+      $$("[data-i18n-html]").forEach(function(el){
+        if(el.dataset.en) el.innerHTML=el.dataset.en;
+      });
+    } else {
+      $$("[data-i18n]").forEach(function(el){
+        var k=el.getAttribute("data-i18n");
+        if(dict[l] && dict[l][k]!=null){el.innerHTML=dict[l][k].replace(/\n/g,"<br>");}
+      });
+      $$("[data-i18n-html]").forEach(function(el){
+        var k=el.getAttribute("data-i18n-html");
+        if(dict[l] && dict[l][k]!=null){el.innerHTML=dict[l][k];}
+      });
+    }
     minis.forEach(function(b){
       var p=b.getAttribute("aria-pressed")==="true";
       b.textContent=!p?(dict[l].approve||"Approve"):(dict[l].approveDone||"Approved ✓");

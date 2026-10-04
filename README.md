@@ -67,13 +67,15 @@ pytest tests/ -v
 > *Will be added at deployment (hour 20–24)*
 
 ## Benchmark Results (14-Tender Suite)
-Generated via `python scripts/benchmark.py --repo . --no-llm --md docs/BENCHMARK.md`:
+Generated directly via `python scripts/benchmark.py --repo . --no-llm --md docs/BENCHMARK.md`:
 
-- **Suite**: 1 real seed tender (`imd-tender.pdf`) + 13 synthetic fixtures derived from GFR 2017 & state templates.
+- **Suite**: 1 real seed tender (`imd-tender.pdf`, NIT CPU/52/0519/9913) + 13 synthetic fixtures derived from GFR 2017 & state templates.
 - **Deterministic Tier Performance**:
-  - EMD Recovery: **12 / 14 (85.7%)**
-  - Exemption Detection: **13 / 14 (92.9%)**
-  - Latency: **p50 = 36.8 ms · p95 = 672.4 ms**
+  - EMD Recovery: **13 / 14 (92.9%)**
+  - Deadline Accuracy: **12 / 14 (85.7%)**
+  - Exemption Detection: **9 / 14 (64.3%)**
+  - Latency: **p50 = 43.9 ms · p95 = 733.5 ms**
+  - **IMD Real Seed Tender**: **100% match** (EMD: ₹10,000, Deadline: 2019-06-24, Turnover: ₹20,00,000, Micro Exemption: Verified)
 
 ### Known Failure Modes & Limitations
 1. **Scanned / Raster Documents**: Documents lacking a machine-readable text layer (`scanned_police_housing.pdf`) are flagged as unreadable pages and routed to human review rather than guessing.
