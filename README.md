@@ -33,7 +33,7 @@ If it isn't in that chain, it doesn't exist.
 ### Design Decisions
 
 1. **The Evaluator is deterministic.** Same inputs → same verdict, always. An LLM deciding eligibility is a bug factory.
-2. **No snippet → not shown as fact.** Every extracted field must cite a verifiable source page and snippet. If it can't, it's flagged `needs-human-review`. This is also our prompt-injection defence.
+2. **No snippet → not shown as fact.** Every extracted field must cite a verifiable source page and snippet. If it can't, it's flagged `needs-human-review`. This is also my prompt-injection defence.
 3. **"Never confidently wrong" over "always answers."** The system prefers `needs-human-review` over guessing. Fields below confidence 0.7 are excluded from the verdict until a human confirms.
 4. **Four human gates, not one vague "review" screen.** Profile confirmation, extraction review, verdict sign-off, draft release.
 5. **There is no code path that submits a bid.** Not to CPPP, not to GeM, not anywhere.
@@ -108,7 +108,7 @@ up_pwd_road_works.pd   | Rs.150,000         | 18-10-2026   | Not specified   | e
 
 ## AI Tools Used
 
-**AI tools used during the build window:** Google Gemini, GitHub Copilot. Used for: generating implementation from specifications we wrote, drafting test cases from our specs, explaining library APIs, and reviewing extraction prompts. All architecture decisions, the eligibility rule set (derived from GFR 2017 and the Public Procurement Policy for MSEs 2012), the human-in-the-loop gate design and the evaluation harness were designed by our team. No AI output was committed without being read, tested and understood by a team member.
+**AI tools used during the build window:** Google Gemini, GitHub Copilot. Used for: generating implementation from specifications I wrote, drafting test cases from my specs, explaining library APIs, and reviewing extraction prompts. All architecture decisions, the eligibility rule set (derived from GFR 2017 and the Public Procurement Policy for MSEs 2012), the human-in-the-loop gate design, and the evaluation harness were designed by me. No AI output was committed without being read, tested, and understood by me.
 
 ## License
 
