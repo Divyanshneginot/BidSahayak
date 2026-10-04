@@ -224,7 +224,30 @@ html.no-js .handmark path{stroke-dashoffset:0}
   box-shadow:none;cursor:not-allowed;transform:none!important}
 .gate-count.nudge{animation:nudge .28s var(--ease) 2;color:var(--ink)}
 @keyframes nudge{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
-html[lang="hi"] body,html[lang="hi"] body *{letter-spacing:0!important}
+html[lang="hi"] body, html[lang="hi"] body * {
+  letter-spacing: 0 !important;
+}
+html[lang="hi"] .hindi-promise {
+  display: none !important;
+}
+html[lang="hi"] h1.hero-title {
+  font-size: clamp(2.2rem, 5.0vw, 3.8rem) !important;
+  line-height: 1.22 !important;
+  letter-spacing: -0.01em !important;
+}
+html[lang="hi"] h1, html[lang="hi"] h2, html[lang="hi"] h3 {
+  line-height: 1.25 !important;
+  letter-spacing: 0 !important;
+}
+html[lang="hi"] .kicker {
+  letter-spacing: 0.12em !important;
+}
+html[lang="hi"] nav.main a {
+  letter-spacing: 0.05em !important;
+}
+html[lang="hi"] .tgl {
+  font-family: var(--sans);
+}
 </style>
 </head>
 <body>
@@ -256,8 +279,7 @@ html[lang="hi"] body,html[lang="hi"] body *{letter-spacing:0!important}
   <div class="wrap hero-grid">
     <div>
       <p class="kicker" data-i18n="hero.kicker">Eligibility copilot · Government tenders · India</p>
-      <h1 class="hero-title" data-i18n-html="hero.title">Can I bid
-on <span class="mark">this one</span>?</h1>
+      <h1 class="hero-title" data-i18n-html="hero.title">Can I bid on <span class="mark">this one</span>?</h1>
       <p class="hero-sub" data-i18n="hero.sub">Upload a tender PDF — English or Hindi, scanned copies included. BidSahayak reads it, extracts every eligibility requirement, compares them against your profile, and answers in about three seconds. Every missing item named. Every number linked to the page it came from.</p>
       <p class="hindi-promise" lang="hi">दस्तावेज़ हम पढ़ते हैं। <span class="mark">तीन सेकंड</span> में। हिंदी में।</p>
       <p class="hero-note" data-i18n="hero.note">A human approves the assessment field by field. The tool never submits a bid on your behalf.</p>
@@ -1032,7 +1054,7 @@ never do</h2>
   hi:{approve:"स्वीकृत",approveDone:"स्वीकृत ✓",
     "nav.evidence":"साक्ष्य","nav.demo":"डेमो","nav.result":"परिणाम","nav.source":"स्रोत","nav.trace":"ट्रेस",
     "hero.kicker":"पात्रता सहायक · सरकारी टेंडर · भारत",
-    "hero.title":"क्या मैं इस पर<br>बोली <span class=\"mark\">लगा सकता हूँ</span>?",
+    "hero.title":"क्या मैं इस पर<br><span class=\"mark\">बोली लगा सकता हूँ?</span>",
     "hero.sub":"टेंडर PDF अपलोड करें — अंग्रेज़ी या हिंदी, स्कैन की हुई कॉपी भी। BidSahayak उसे पढ़ता है, हर पात्रता शर्त निकालता है, आपकी प्रोफ़ाइल से तुलना करता है, और करीब तीन सेकंड में जवाब देता है। हर कमी का नाम। हर आंकड़ा उस पृष्ठ से जुड़ा, जहाँ से आया।",
     "hero.note":"मूल्यांकन को मनुष्य क्षेत्र-दर-क्षेत्र स्वीकृत करता है। यह उपकरण आपकी ओर से कभी बोली नहीं लगाता।",
     "hero.marknote":"2019 की एक असली IMD टेंडर पृष्ठ पर इस वाक्य पर अधिकारी के पीले हाइलाइटर का निशान है। BidSahayak ऐसे निशानों के आसपास की हर चीज़ स्वचालित करता है — और उन्हें कभी मिटाता नहीं।",
@@ -1100,11 +1122,37 @@ never do</h2>
     "f.demo":"डेमो डेटा प्रतिनिधिक है, असली टेंडर संदर्भ NIT CPU/52/0519/9913 (IMD, 2019) पर दिखाया गया है। इस पृष्ठ के आंकड़े CAG, MSME मंत्रालय, GeM और केंद्रीय बजट स्रोतों से उद्धृत हैं।"
   }};
   var cur="en", langTgl=$("#langTgl");
+
+  // Pre-populate dict.en from initial English DOM markup so two-way toggle works 100%!
+  $$("[data-i18n]").forEach(function(el){
+    var k=el.getAttribute("data-i18n");
+    if(!dict.en[k]) dict.en[k]=el.innerHTML.replace(/<br\s*[\/]?>/gi, "\n");
+  });
+  $$("[data-i18n-html]").forEach(function(el){
+    var k=el.getAttribute("data-i18n-html");
+    if(!dict.en[k]) dict.en[k]=el.innerHTML;
+  });
+
   function applyLang(l){
-    cur=l; langTgl.setAttribute("aria-pressed",l==="hi");
-    document.documentElement.setAttribute("lang",l==="hi"?"hi":"en");
-    $$("[data-i18n]").forEach(function(el){var k=el.getAttribute("data-i18n");if(dict[l][k]!=null){el.innerHTML=dict[l][k].replace(/\n/g,"<br>");}});
-    $$("[data-i18n-html]").forEach(function(el){var k=el.getAttribute("data-i18n-html");if(dict[l][k]!=null){el.innerHTML=dict[l][k];}});
+    cur=l;
+    langTgl.setAttribute("aria-pressed", l==="hi");
+    langTgl.setAttribute("aria-label", l==="hi" ? "Switch to English" : "Switch to Hindi (हिंदी में बदलें)");
+    langTgl.innerHTML = l==="hi"
+      ? '<span style="font-weight:700">हिं</span> / <span style="opacity:0.65">EN</span>'
+      : '<span style="opacity:0.65">हिं</span> / <span style="font-weight:700">EN</span>';
+    document.documentElement.setAttribute("lang", l==="hi"?"hi":"en");
+    $$("[data-i18n]").forEach(function(el){
+      var k=el.getAttribute("data-i18n");
+      if(dict[l] && dict[l][k]!=null){el.innerHTML=dict[l][k].replace(/\n/g,"<br>");}
+    });
+    $$("[data-i18n-html]").forEach(function(el){
+      var k=el.getAttribute("data-i18n-html");
+      if(dict[l] && dict[l][k]!=null){el.innerHTML=dict[l][k];}
+    });
+    minis.forEach(function(b){
+      var p=b.getAttribute("aria-pressed")==="true";
+      b.textContent=!p?(dict[l].approve||"Approve"):(dict[l].approveDone||"Approved ✓");
+    });
   }
   langTgl.addEventListener("click",function(){applyLang(cur==="en"?"hi":"en")});
 })();

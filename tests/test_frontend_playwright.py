@@ -23,21 +23,46 @@ def test_frontend_loads_and_i18n():
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            try:
+                browser = p.chromium.launch(channel="msedge")
+            except Exception:
+                browser = p.chromium.launch()
+
             page = browser.new_page(viewport={"width": 1280, "height": 900})
             page.goto(URL)
             page.wait_for_timeout(400)
 
             # Check h1
             assert page.locator("h1").count() == 1
+            h1_initial = page.locator("h1.hero-title").inner_text()
+            assert "Can I bid" in h1_initial
 
-            # Check i18n toggle
+            # Check i18n two-way toggle
             tgl = page.locator("#langTgl")
             if tgl.count() > 0:
+                # 1. Switch to Hindi
                 tgl.click()
                 page.wait_for_timeout(300)
                 lang = page.evaluate("document.documentElement.lang")
                 assert lang == "hi"
+                h1_hi = page.locator("h1.hero-title").inner_text()
+                assert "बोली" in h1_hi
+
+                # 2. Switch back to English (verify 2-way toggle fix)
+                tgl.click()
+                page.wait_for_timeout(300)
+                lang_revert = page.evaluate("document.documentElement.lang")
+                assert lang_revert == "en"
+                h1_en = page.locator("h1.hero-title").inner_text()
+                assert "Can I bid" in h1_en
+
+            # Check theme toggle
+            theme_btn = page.locator("#themeTgl")
+            if theme_btn.count() > 0:
+                theme_btn.click()
+                page.wait_for_timeout(200)
+                theme = page.evaluate("document.documentElement.getAttribute('data-theme')")
+                assert theme in ["dark", "light"]
 
             browser.close()
     except Exception as e:
