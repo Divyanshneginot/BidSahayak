@@ -44,3 +44,7 @@ htmlcov/
 
 # Uploads
 uploads/
+
+*.bak
+*.bak*
+shots/
