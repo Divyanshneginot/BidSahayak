@@ -1476,15 +1476,42 @@ never do</h2>
                 .then(function(newVerdict){
                   b.setAttribute("aria-pressed","true");
                   b.textContent=dict[cur].approveDone||"Approved ✓";
-                  var pill=document.createElement("span");
-                  pill.className="status met";
-                  pill.style.fontSize=".65rem";
-                  pill.style.marginLeft=".4rem";
-                  pill.textContent="Audited ✓";
-                  b.parentNode.appendChild(pill);
+                  var pill=b.parentNode.querySelector(".audited-badge");
+                  if(!pill){
+                    pill=document.createElement("span");
+                    pill.className="status met audited-badge";
+                    pill.style.fontSize=".65rem";
+                    pill.style.marginLeft=".4rem";
+                    pill.textContent="Audited ✓";
+                    b.parentNode.appendChild(pill);
+                  }
+                  var rowStatus = b.parentNode.querySelector(".status:not(.audited-badge)");
+                  if(rowStatus){
+                    rowStatus.className="status met";
+                    rowStatus.textContent="Met";
+                  }
                   if(newVerdict){
                     currentSession.verdict = newVerdict;
-                    renderLiveAssessment(currentSession);
+                    var vw=$("[data-i18n-html='res.verdict']");
+                    if(vw){
+                      if(newVerdict.overall==="eligible"){
+                        vw.innerHTML='Eligible — <span class="u" style="box-shadow:inset 0 -.42em 0 var(--status-met)">Full Match</span>';
+                      } else if(newVerdict.overall==="eligible-with-gaps"){
+                        vw.innerHTML='Eligible — <span class="u">with gaps</span>';
+                      } else if(newVerdict.overall==="not-eligible"){
+                        vw.innerHTML='Not Eligible — <span class="u" style="box-shadow:inset 0 -.42em 0 var(--status-miss)">Critical Gaps</span>';
+                      } else {
+                        vw.innerHTML='Needs Review — <span class="u" style="box-shadow:inset 0 -.42em 0 var(--status-review)">Human Check</span>';
+                      }
+                    }
+                    var why=$("[data-i18n='res.why']");
+                    if(why && newVerdict.summary)why.textContent=newVerdict.summary;
+                    var vmB=$$(".verdict-meta .vm b")[1];
+                    if(vmB && newVerdict.verdicts){
+                      var metC=newVerdict.verdicts.filter(function(r){return r.status==="met"}).length;
+                      var exC=newVerdict.verdicts.filter(function(r){return r.status==="waived"}).length;
+                      vmB.innerHTML=metC+(exC?('+'+exC):'')+'<span style="color:var(--mustard)">/'+newVerdict.verdicts.length+'</span>';
+                    }
                   }
                   refresh();
                 })
