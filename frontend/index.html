@@ -931,10 +931,35 @@ never do</h2>
   dz.addEventListener("drop",function(e){if(e.dataTransfer.files.length){handleFile(e.dataTransfer.files[0])}});
   fi.addEventListener("change",function(){if(fi.files.length){handleFile(fi.files[0])}});
   function handleFile(f){
-    var note=f&&f.name?f.name:"tender.pdf";
+    if(!f)return;
+    var note=f.name||"tender.pdf";
     dz.querySelector(".dz-text strong").textContent=note;
-    dz.querySelector(".dz-text span").textContent="Demo build — live extraction runs in the full product. Running the worked example instead…";
-    setTimeout(runDemo,700);
+    dz.querySelector(".dz-text span").textContent="Uploading to BidSahayak Supervisor & analyzing…";
+
+    var fd=new FormData();
+    fd.append("file",f);
+
+    // Scroll to demo console and animate
+    $("#demo").scrollIntoView({behavior:"smooth"});
+    runDemo();
+
+    fetch("/api/assess/process",{method:"POST",body:fd})
+      .then(function(r){return r.ok?r.json():Promise.reject(r.statusText)})
+      .then(function(data){
+        dz.querySelector(".dz-text span").textContent="Assessment complete ✓";
+        if(data && data.matrix){
+          var kicker=$("[data-i18n='res.kicker']");
+          if(kicker)kicker.textContent="Verdict · "+(data.tender_id||"TENDER")+" · Real Extraction";
+          if(data.verdict && data.verdict.summary){
+            var why=$("[data-i18n='res.why']");
+            if(why)why.textContent=data.verdict.summary;
+          }
+        }
+      })
+      .catch(function(err){
+        console.warn("Live API unavailable, continuing with demo flow:",err);
+        dz.querySelector(".dz-text span").textContent="Demo preview mode active";
+      });
   }
 
   /* ---------- demo run ---------- */
