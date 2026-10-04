@@ -26,6 +26,9 @@ from src.agent.prompts import (
 logger = logging.getLogger(__name__)
 
 
+_DEFAULT = object()
+
+
 class ExtractorAgent:
     """
     W4: ExtractorAgent with verifiable Agent Loop.
@@ -37,33 +40,49 @@ class ExtractorAgent:
     Every step is recorded in self.audit_trace.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
-        self.provider = os.getenv("LLM_PROVIDER")
-        if api_key is None:
-            if self.provider == "groq":
-                self.api_key = os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")
-            elif self.provider == "openai":
-                self.api_key = os.getenv("OPENAI_API_KEY") or os.getenv("LLM_API_KEY")
-            elif self.provider == "gemini":
-                self.api_key = os.getenv("GEMINI_API_KEY") or os.getenv("LLM_API_KEY")
-            else:
-                self.api_key = (
-                    os.getenv("GROQ_API_KEY")
-                    or os.getenv("LLM_API_KEY")
-                    or os.getenv("GEMINI_API_KEY")
-                )
+    def __init__(self, api_key: Any = _DEFAULT, model: Optional[str] = None):
+        if api_key is _DEFAULT:
+            self.groq_key = os.getenv("GROQ_API_KEY")
+            self.gemini_key = os.getenv("GEMINI_API_KEY")
+            self.openai_key = os.getenv("OPENAI_API_KEY")
+            self.llm_api_key = os.getenv("LLM_API_KEY")
         else:
-            self.api_key = api_key
+            self.groq_key = api_key if (isinstance(api_key, str) and api_key.startswith("gsk_")) else None
+            self.gemini_key = api_key if (isinstance(api_key, str) and (api_key.startswith("AIza") or api_key.startswith("AQ."))) else None
+            self.openai_key = api_key if (isinstance(api_key, str) and api_key.startswith("sk-")) else None
+            self.llm_api_key = api_key if isinstance(api_key, str) else None
 
-        if not self.provider and self.api_key:
-            if self.api_key.startswith("AIza") or self.api_key.startswith("AQ."):
-                self.provider = "gemini"
-            elif self.api_key.startswith("gsk_"):
-                self.provider = "groq"
-            elif self.api_key.startswith("sk-"):
-                self.provider = "openai"
-            else:
-                self.provider = "gemini"
+        pref_provider = os.getenv("LLM_PROVIDER")
+        self.candidates: list[tuple[str, str]] = []
+        if pref_provider == "groq" and self.groq_key:
+            self.candidates.append(("groq", self.groq_key))
+        elif pref_provider == "gemini" and self.gemini_key:
+            self.candidates.append(("gemini", self.gemini_key))
+        elif pref_provider == "openai" and self.openai_key:
+            self.candidates.append(("openai", self.openai_key))
+
+        if self.groq_key and ("groq", self.groq_key) not in self.candidates:
+            self.candidates.append(("groq", self.groq_key))
+        if self.gemini_key and ("gemini", self.gemini_key) not in self.candidates:
+            self.candidates.append(("gemini", self.gemini_key))
+        if self.openai_key and ("openai", self.openai_key) not in self.candidates:
+            self.candidates.append(("openai", self.openai_key))
+        if self.llm_api_key:
+            if self.llm_api_key.startswith("gsk_") and ("groq", self.llm_api_key) not in self.candidates:
+                self.candidates.append(("groq", self.llm_api_key))
+            elif (self.llm_api_key.startswith("AIza") or self.llm_api_key.startswith("AQ.")) and ("gemini", self.llm_api_key) not in self.candidates:
+                self.candidates.append(("gemini", self.llm_api_key))
+            elif self.llm_api_key.startswith("sk-") and ("openai", self.llm_api_key) not in self.candidates:
+                self.candidates.append(("openai", self.llm_api_key))
+            elif not self.candidates:
+                self.candidates.append(("gemini" if (self.llm_api_key.startswith("AIza") or self.llm_api_key.startswith("AQ.")) else "groq", self.llm_api_key))
+
+        if api_key and not self.candidates:
+            prov = "gemini" if (api_key.startswith("AIza") or api_key.startswith("AQ.")) else ("groq" if api_key.startswith("gsk_") else "openai")
+            self.candidates.append((prov, api_key))
+
+        self.provider = self.candidates[0][0] if self.candidates else (pref_provider or "gemini")
+        self.api_key = self.candidates[0][1] if self.candidates else (api_key or self.groq_key or self.gemini_key or self.llm_api_key)
 
         default_model = "gemini-2.0-flash" if self.provider == "gemini" else "openai/gpt-oss-120b"
         self.model = model or os.getenv("LLM_MODEL") or default_model
@@ -251,64 +270,81 @@ class ExtractorAgent:
 
     def _call_llm(self, prompt_text: str) -> dict:
         import requests
+        import time
 
-        if (self.provider == "gemini" or (self.api_key and (self.api_key.startswith("AIza") or self.api_key.startswith("AQ.")))) and self.provider != "groq":
-            gemini_model = self.model if "gemini" in self.model else "gemini-2.0-flash"
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={self.api_key}"
-            payload = {
-                "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT}\n\n{prompt_text}"}]}],
-                "generationConfig": {
-                    "responseMimeType": "application/json",
-                    "temperature": 0.0,
-                },
-            }
-            res = requests.post(url, json=payload, timeout=20)
-            if res.status_code == 200:
-                raw_json = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-            else:
-                raise RuntimeError(f"Gemini API returned status {res.status_code}: {res.text}")
-        else:
-            endpoint = "https://api.openai.com/v1/chat/completions"
-            model_name = self.model
+        if not self.candidates:
+            raise RuntimeError("No LLM provider configured or available")
 
-            if (self.api_key and self.api_key.startswith("gsk_")) or self.provider == "groq":
-                endpoint = "https://api.groq.com/openai/v1/chat/completions"
-                if not self.model or self.model in ["llama-3.3-70b-versatile", "default"]:
-                    model_name = "openai/gpt-oss-120b"
-
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": model_name,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt_text},
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.0,
-            }
-            import time
-            raw_json = None
-            for retry_429 in range(4):
-                res = requests.post(endpoint, json=payload, headers=headers, timeout=25)
-                if res.status_code == 429:
-                    time.sleep(7)
-                    continue
-                if res.status_code == 200:
-                    raw_json = res.json()["choices"][0]["message"]["content"]
-                    break
+        last_err = None
+        for prov, key in list(self.candidates):
+            try:
+                if prov == "gemini":
+                    gemini_model = self.model if "gemini" in self.model else "gemini-2.0-flash"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={key}"
+                    payload = {
+                        "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT}\n\n{prompt_text}"}]}],
+                        "generationConfig": {
+                            "responseMimeType": "application/json",
+                            "temperature": 0.0,
+                        },
+                    }
+                    res = requests.post(url, json=payload, timeout=20)
+                    if res.status_code == 200:
+                        raw_json = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                        self.provider = "gemini"
+                        self.api_key = key
+                    else:
+                        raise RuntimeError(f"Gemini API returned status {res.status_code}: {res.text}")
                 else:
-                    raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
-            if raw_json is None:
-                raise RuntimeError(f"LLM API ({endpoint}) rate limited after 4 retries")
+                    endpoint = "https://api.openai.com/v1/chat/completions"
+                    model_name = self.model
 
-        clean_json = raw_json.strip()
-        if clean_json.startswith("```"):
-            clean_json = re.sub(r"^```(?:json)?\s*", "", clean_json)
-            clean_json = re.sub(r"\s*```$", "", clean_json)
-        return json.loads(clean_json)
+                    if prov == "groq" or (key and key.startswith("gsk_")):
+                        endpoint = "https://api.groq.com/openai/v1/chat/completions"
+                        if not self.model or "gemini" in self.model or self.model in ["llama-3.3-70b-versatile", "default"]:
+                            model_name = "openai/gpt-oss-120b"
+
+                    headers = {
+                        "Authorization": f"Bearer {key}",
+                        "Content-Type": "application/json",
+                    }
+                    payload = {
+                        "model": model_name,
+                        "messages": [
+                            {"role": "system", "content": SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt_text},
+                        ],
+                        "response_format": {"type": "json_object"},
+                        "temperature": 0.0,
+                    }
+                    raw_json = None
+                    for retry_429 in range(3):
+                        res = requests.post(endpoint, json=payload, headers=headers, timeout=25)
+                        if res.status_code == 429:
+                            time.sleep(4)
+                            continue
+                        if res.status_code == 200:
+                            raw_json = res.json()["choices"][0]["message"]["content"]
+                            self.provider = prov
+                            self.api_key = key
+                            break
+                        else:
+                            raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
+                    if raw_json is None:
+                        raise RuntimeError(f"LLM API ({endpoint}) rate limited after 3 retries")
+
+                clean_json = raw_json.strip()
+                if clean_json.startswith("```"):
+                    clean_json = re.sub(r"^```(?:json)?\s*", "", clean_json)
+                    clean_json = re.sub(r"\s*```$", "", clean_json)
+                return json.loads(clean_json)
+
+            except Exception as e:
+                logger.warning(f"LLM provider '{prov}' attempt failed: {e}. Cascading to next available provider if any.")
+                last_err = e
+                continue
+
+        raise RuntimeError(f"All configured LLM providers failed. Last error: {last_err}")
 
     @staticmethod
     def _parse_matrix_dict(data: dict, tender_id: str) -> RequirementMatrix:
