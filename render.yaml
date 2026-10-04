@@ -11,3 +11,5 @@ services:
         value: 3.12.0
       - key: CONFIDENCE_THRESHOLD
         value: 0.7
+      - key: ALLOWED_ORIGINS
+        value: "*"

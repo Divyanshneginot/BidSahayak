@@ -1,0 +1,25 @@
+{
+  "passed": 18,
+  "total": 18,
+  "rate": 1.0,
+  "results": {
+    "G1": "PASS",
+    "G2": "PASS",
+    "G3": "PASS",
+    "G4": "PASS",
+    "G5": "PASS",
+    "G6": "PASS",
+    "G7": "PASS",
+    "G8": "PASS",
+    "G10": "PASS",
+    "G11": "PASS",
+    "G12": "PASS",
+    "G13": "PASS",
+    "G14": "PASS",
+    "G15": "PASS",
+    "G16": "PASS",
+    "G18": "PASS",
+    "G19": "PASS",
+    "G23": "PASS"
+  }
+}
