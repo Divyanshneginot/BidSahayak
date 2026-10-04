@@ -1566,7 +1566,7 @@ never do</h2>
           clearTimeout(to);
           dz.removeAttribute("aria-busy");
           if(hintEl){hintEl.textContent=dict[cur]["dz.success"]||"Assessment complete ✓";
-          var sk=(data.skipped_pages||[]).length;
+          var sk=(currentSession && currentSession.skipped_pages ? currentSession.skipped_pages : []).length;
           if(sk>0)hintEl.textContent+=" — "+sk+" page(s) had no readable text layer, excluded from analysis.";}
           renderLiveAssessment(currentSession);
           var r=$("#result");
@@ -1578,8 +1578,10 @@ never do</h2>
         if(titleEl)titleEl.textContent=dict[cur]["dz.title"]||"Drop a tender PDF here, or browse";
         if(hintEl)hintEl.textContent=dict[cur]["dz.hint"]||"PDF · up to 25 MB";
         dz.removeAttribute("aria-busy");
-        var errMsg=err.message||"Failed to process tender";
-        showUploadError(dict[cur]["err.liveFail"]||("Live assessment service unavailable: "+errMsg+". You can run the worked example below."));
+        console.error("Live assessment error:", err);
+        var errMsg=err&&err.message?err.message:"Failed to process tender";
+        var baseMsg=dict[cur]["err.liveFail"]||"Live assessment service unavailable. You can run the worked example below.";
+        showUploadError(baseMsg + (errMsg ? " (" + errMsg + ")" : ""));
       });
   }
 
