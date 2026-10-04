@@ -82,3 +82,24 @@ def test_upload_and_process_file():
         assert "session_id" in data
         assert "trace" in data
         assert len(data["trace"]) >= 3
+
+
+def test_security_path_traversal_and_magic_bytes():
+    # 1. Path traversal attempt must not escape UPLOAD_DIR
+    fake_pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    res = client.post(
+        "/api/assess/upload",
+        files={"file": ("../../malicious_traversal.pdf", fake_pdf, "application/pdf")}
+    )
+    # Must succeed in saving safely inside UPLOAD_DIR (or reject) without creating file in root
+    assert not os.path.exists("malicious_traversal.pdf")
+    assert not os.path.exists("../../malicious_traversal.pdf")
+
+    # 2. Non-PDF magic bytes must be rejected with 400
+    fake_exe = b"MZ\x90\x00\x03\x00\x00\x00"
+    res_fake = client.post(
+        "/api/assess/upload",
+        files={"file": ("fake.pdf", fake_exe, "application/pdf")}
+    )
+    assert res_fake.status_code == 400
+    assert "missing valid PDF header" in res_fake.json()["detail"]

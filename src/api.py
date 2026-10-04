@@ -4,6 +4,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 import shutil
+import uuid
+import re
 from typing import Optional
 
 from src.models import (
@@ -50,15 +52,36 @@ def health():
     }
 
 
-@app.post("/api/assess/upload")
-async def upload_tender_pdf(file: UploadFile = File(...)):
-    """W1 + W2: Ingest PDF, extract text, detect sections, and return initial metadata."""
+def _save_uploaded_pdf(file: UploadFile) -> str:
+    """Securely validates and saves an uploaded PDF file preventing path traversal and corrupt files."""
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
 
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
+    safe_basename = os.path.basename(file.filename)
+    safe_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", safe_basename)
+    unique_name = f"{uuid.uuid4().hex[:8]}_{safe_name}"
+    file_path = os.path.join(UPLOAD_DIR, unique_name)
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
+
+    # Magic byte validation (%PDF-)
+    with open(file_path, "rb") as f:
+        header = f.read(5)
+    if header != b"%PDF-":
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+        raise HTTPException(status_code=400, detail="Corrupted file: missing valid PDF header (%PDF-).")
+
+    return file_path
+
+
+@app.post("/api/assess/upload")
+async def upload_tender_pdf(file: UploadFile = File(...)):
+    """W1 + W2: Ingest PDF, extract text, detect sections, and return initial metadata."""
+    file_path = _save_uploaded_pdf(file)
 
     ingest_result = ingest_worker.process(file_path)
     if not ingest_result.is_valid:
@@ -83,13 +106,7 @@ async def upload_tender_pdf(file: UploadFile = File(...)):
 @app.post("/api/assess/process")
 async def process_full_tender(file: UploadFile = File(...)):
     """Runs Supervisor end-to-end: W1 Ingest -> W2 Text -> W4 Extract -> Trace."""
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
-
-    file_path = os.path.join(UPLOAD_DIR, file.filename)
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-
+    file_path = _save_uploaded_pdf(file)
     session = supervisor.process_document(file_path)
     return session
 
