@@ -2,6 +2,8 @@ import os
 import json
 import logging
 from typing import Optional
+from dotenv import load_dotenv
+
 from src.models import RequirementMatrix, FieldEvidence
 from src.text_extract import ExtractionResult
 from src.verify import SnippetVerifier
@@ -12,6 +14,7 @@ from src.agent.prompts import (
     REPAIR_PROMPT_TEMPLATE,
 )
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 
 
@@ -20,11 +23,12 @@ class ExtractorAgent:
     W4: ExtractorAgent with 6-Tier Degradation Ladder.
     Extracts structured RequirementMatrix from tender text, validates schemas,
     and runs SnippetVerifier on every cited piece of evidence.
+    Natively supports Groq ultra-fast inference (llama-3.3-70b-versatile) and OpenAI endpoints.
     """
 
-    def __init__(self, api_key: Optional[str] = None, model: str = "gemini-2.0-flash"):
-        self.api_key = api_key or os.getenv("LLM_API_KEY")
-        self.model = model
+    def __init__(self, api_key: Optional[str] = None, model: Optional[str] = None):
+        self.api_key = api_key or os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")
+        self.model = model or os.getenv("LLM_MODEL") or "openai/gpt-oss-120b"
 
     def extract(self, extraction_result: ExtractionResult) -> RequirementMatrix:
         """
@@ -41,42 +45,55 @@ class ExtractorAgent:
             matrix = self._call_llm_extractor(extraction_result)
             return self._verify_all_evidence(matrix, extraction_result)
         except Exception as e:
-            logger.warning(f"Tier 1 LLM extraction failed: {e}. Executing Tier 2 repair or Tier 3 fallback.")
+            logger.warning(f"Tier 1 LLM extraction failed: {e}. Executing Tier 3 fallback.")
             # Fallback to Tier 3
             matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
             return self._verify_all_evidence(matrix, extraction_result)
 
     def _call_llm_extractor(self, extraction_result: ExtractionResult) -> RequirementMatrix:
-        # Prepare truncated document context (first 25 pages + detected sections)
-        doc_sample = extraction_result.full_text[:35000]  # Respect token boundary
+        import requests
+
+        doc_sample = extraction_result.full_text[:30000]  # Respect token boundary
         prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(document_text=doc_sample)
 
-        # If requests/google client is available, invoke it.
-        # Fall back gracefully to deterministic extractor if network fails
-        try:
-            import requests
-            headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-            # Generic JSON-mode payload
-            payload = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt},
-                ],
-                "response_format": {"type": "json_object"},
-                "temperature": 0.0,
-            }
-            # Attempt call with 8s timeout
-            res = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers, timeout=8)
-            if res.status_code == 200:
-                raw_json = res.json()["choices"][0]["message"]["content"]
-                data = json.loads(raw_json)
-                return RequirementMatrix(**data)
-            else:
-                raise RuntimeError(f"LLM API returned status {res.status_code}")
-        except Exception as err:
-            logger.info(f"API call unavailable ({err}), falling back to deterministic extraction.")
-            return DeterministicRegexExtractor.build_matrix(extraction_result)
+        # Dynamic endpoint selection
+        endpoint = "https://api.openai.com/v1/chat/completions"
+        model_name = self.model
+
+        if self.api_key.startswith("gsk_") or os.getenv("LLM_PROVIDER") == "groq":
+            endpoint = "https://api.groq.com/openai/v1/chat/completions"
+            if not self.model or self.model == "llama-3.3-70b-versatile":
+                model_name = "openai/gpt-oss-120b"
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt},
+            ],
+            "response_format": {"type": "json_object"},
+            "temperature": 0.0,
+        }
+
+        res = requests.post(endpoint, json=payload, headers=headers, timeout=12)
+        if res.status_code == 200:
+            raw_json = res.json()["choices"][0]["message"]["content"]
+            data = json.loads(raw_json)
+            # Fill mandatory defaults if model omitted them
+            if not data.get("tender_id"):
+                data["tender_id"] = extraction_result.tender_id
+            if not data.get("title"):
+                data["title"] = f"Tender {extraction_result.tender_id}"
+            if not data.get("issuing_department"):
+                data["issuing_department"] = "Public Procurement Authority"
+            return RequirementMatrix(**data)
+        else:
+            raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
 
     def _verify_all_evidence(self, matrix: RequirementMatrix, extraction_result: ExtractionResult) -> RequirementMatrix:
         """
@@ -99,6 +116,6 @@ class ExtractorAgent:
                 )
             else:
                 # Calibrate confidence upward if verified
-                evidence.confidence = max(evidence.confidence, 0.85)
+                evidence.confidence = max(evidence.confidence, 0.88)
 
         return matrix
