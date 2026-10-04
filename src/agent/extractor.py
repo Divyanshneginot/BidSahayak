@@ -2,7 +2,11 @@ import os
 import json
 import logging
 from typing import Optional
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from src.models import RequirementMatrix, FieldEvidence
 from src.text_extract import ExtractionResult
@@ -14,7 +18,6 @@ from src.agent.prompts import (
     REPAIR_PROMPT_TEMPLATE,
 )
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 
