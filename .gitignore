@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables — NEVER commit real keys
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / Coverage
+htmlcov/
+.coverage
+.pytest_cache/
+
+# Playwright browsers
+.pw/
+
+# SQLite
+*.db
+*.sqlite3
+
+# Logs
+*.log
