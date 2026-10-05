@@ -8,6 +8,21 @@ import uuid
 import re
 from typing import Optional, Any
 from pydantic import BaseModel, Field
+import logging
+
+def configure_logging(level_name: Optional[str] = None) -> int:
+    name = (level_name or os.getenv("LOG_LEVEL", "INFO")).upper()
+    level = getattr(logging, name, logging.INFO)
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        force=True,
+    )
+    logging.getLogger("src").setLevel(level)
+    return level
+
+configure_logging()
+logger = logging.getLogger(__name__)
 
 from src.models import (
     RequirementMatrix,

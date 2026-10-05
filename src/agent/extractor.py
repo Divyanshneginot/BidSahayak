@@ -27,6 +27,7 @@ from src.agent.prompts import (
 )
 
 logger = logging.getLogger(__name__)
+logger.setLevel(getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper(), logging.INFO))
 
 
 def _scrub(s: Any) -> str:

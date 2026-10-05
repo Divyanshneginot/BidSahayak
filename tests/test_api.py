@@ -387,3 +387,24 @@ def test_security_headers_and_disabled_docs():
     assert client.get("/docs").status_code == 404
     assert client.get("/redoc").status_code == 404
     assert client.get("/openapi.json").status_code == 404
+
+
+def test_logging_configuration_and_no_pii_or_tender_text(monkeypatch):
+    import logging
+    from src.api import configure_logging
+
+    # 1. Configurable via env
+    monkeypatch.setenv("LOG_LEVEL", "DEBUG")
+    lvl = configure_logging()
+    assert lvl == logging.DEBUG
+    assert logging.getLogger("src").level == logging.DEBUG
+
+    monkeypatch.setenv("LOG_LEVEL", "WARNING")
+    lvl2 = configure_logging()
+    assert lvl2 == logging.WARNING
+    assert logging.getLogger("src").level == logging.WARNING
+
+    # Reset back to INFO
+    monkeypatch.delenv("LOG_LEVEL", raising=False)
+    configure_logging("INFO")
+
