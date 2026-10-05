@@ -2,7 +2,10 @@ import os
 import re
 import json
 import logging
+import time
 from typing import Optional, Any
+
+_llm_call_timestamps: list[float] = []
 try:
     from pathlib import Path
     from dotenv import load_dotenv
@@ -205,6 +208,24 @@ class ExtractorAgent:
             verified_matrix, _ = self._verify_all_evidence(matrix, extraction_result)
             return verified_matrix
 
+        # Check LLM hourly rate cap
+        hourly_cap = int(os.getenv("LLM_HOURLY_CAP", "60"))
+        now = time.time()
+        global _llm_call_timestamps
+        _llm_call_timestamps = [t for t in _llm_call_timestamps if now - t < 3600]
+        if len(_llm_call_timestamps) >= hourly_cap:
+            logger.warning("LLM hourly cap (%d) exceeded. Executing Tier 3 deterministic regex extractor.", hourly_cap)
+            self.last_tier = 3
+            self.fallback_reason = "LLM provider unavailable; used deterministic fallback"
+            self.audit_trace.append({
+                "step": "deterministic_fallback",
+                "tier": 3,
+                "reason": "Hourly LLM rate cap exceeded; used deterministic fallback",
+            })
+            matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
+            verified_matrix, _ = self._verify_all_evidence(matrix, extraction_result)
+            return verified_matrix
+
         # Real Agent Loop with Self-Repair (Tier 1)
         doc_text = self._retrieve_relevant_sections(extraction_result)
         initial_prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(document_text=doc_text)
@@ -285,6 +306,9 @@ class ExtractorAgent:
     def _call_llm(self, prompt_text: str) -> dict:
         import requests
         import time
+
+        global _llm_call_timestamps
+        _llm_call_timestamps.append(time.time())
 
         if not self.candidates:
             raise RuntimeError("No LLM provider configured or available")

@@ -1,8 +1,21 @@
 from fastapi.testclient import TestClient
 from src.api import app
 import os
+import pytest
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limits():
+    from src.api import _client_requests, _strict_requests, _rate_limit_lock
+    with _rate_limit_lock:
+        _client_requests.clear()
+        _strict_requests.clear()
+    yield
+    with _rate_limit_lock:
+        _client_requests.clear()
+        _strict_requests.clear()
 
 
 def test_health_endpoint():
@@ -250,3 +263,63 @@ def test_upload_streaming_cap_25mb_aborts_and_deletes_partial():
     assert exc.value.status_code == 413
     after_files = set(os.listdir(UPLOAD_DIR))
     assert before_files == after_files
+
+
+def test_rate_limiting_exclusions_and_strict_limit():
+    from src.api import _client_requests, _strict_requests, _rate_limit_lock
+    import time
+
+    with _rate_limit_lock:
+        _client_requests.clear()
+        _strict_requests.clear()
+
+    # 1. /api/health should be excluded from limiter
+    for _ in range(10):
+        res = client.get("/api/health")
+        assert res.status_code == 200
+
+    # 2. Strict limit on upload (6/min)
+    fake_pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+    for _ in range(6):
+        res = client.post(
+            "/api/assess/upload",
+            files={"file": ("test.pdf", fake_pdf, "application/pdf")},
+            headers={"x-forwarded-for": "198.51.100.1"},
+        )
+        assert res.status_code in (200, 400)
+
+    # 7th request from same IP must hit 429 JSON response with Retry-After header
+    res_429 = client.post(
+        "/api/assess/upload",
+        files={"file": ("test.pdf", fake_pdf, "application/pdf")},
+        headers={"x-forwarded-for": "198.51.100.1"},
+    )
+    assert res_429.status_code == 429
+    assert res_429.headers.get("content-type") == "application/json"
+    assert "Retry-After" in res_429.headers
+    assert "detail" in res_429.json()
+
+    # 3. Prune empty IP keys: set old timestamps and verify cleanup
+    with _rate_limit_lock:
+        _strict_requests["stale_ip"] = [time.time() - 100]
+    client.get("/")
+    with _rate_limit_lock:
+        assert "stale_ip" not in _strict_requests
+
+
+def test_llm_hourly_cap_triggers_deterministic_fallback(monkeypatch):
+    from src.agent.extractor import ExtractorAgent, _llm_call_timestamps
+    from src.text_extract import ExtractionResult, PageText
+    import time
+
+    monkeypatch.setenv("LLM_HOURLY_CAP", "2")
+    _llm_call_timestamps.clear()
+    _llm_call_timestamps.extend([time.time() - 10, time.time() - 5])
+
+    agent = ExtractorAgent(api_key="test-api-key-mock")
+    fake_pages = {1: PageText(page_number=1, raw_text="EMD is Rs 50000. Turnover 10 Lakhs.", normalized_text="EMD is Rs 50000. Turnover 10 Lakhs.", char_count=35, is_scanned_likely=False)}
+    ext_res = ExtractionResult(tender_id="TEST-CAP", total_pages=1, full_text="EMD is Rs 50000. Turnover 10 Lakhs.", pages=fake_pages, detected_sections=[], is_scanned_document=False, skipped_pages=[])
+
+    matrix = agent.extract(ext_res)
+    assert agent.last_tier == 3
+    assert any("cap" in str(a) for a in agent.audit_trace)

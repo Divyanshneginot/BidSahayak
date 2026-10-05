@@ -1,7 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import os
 import shutil
 import uuid
@@ -54,16 +54,66 @@ app.user_middleware.append(
 # In-memory simple rate limiter and security headers
 RATE_LIMIT_WINDOW = 60
 MAX_REQUESTS_PER_MINUTE = 120
-_client_requests = defaultdict(list)
+STRICT_REQUESTS_PER_MINUTE = 6
+LLM_HOURLY_CAP = int(os.getenv("LLM_HOURLY_CAP", "60"))
+
+_client_requests: dict[str, list[float]] = {}
+_strict_requests: dict[str, list[float]] = {}
+_rate_limit_lock = threading.Lock()
 
 @app.middleware("http")
 async def security_and_rate_limit_middleware(request: Request, call_next):
-    client_ip = request.client.host if request.client else "unknown"
+    path = request.url.path
+    # Exclude /api/health and /static from the limiter
+    if path == "/api/health" or path.startswith("/api/health") or path.startswith("/static"):
+        response: Response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
+
+    forwarded = request.headers.get("x-forwarded-for")
+    client_ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
     now = time.time()
-    _client_requests[client_ip] = [t for t in _client_requests[client_ip] if now - t < RATE_LIMIT_WINDOW]
-    if len(_client_requests[client_ip]) >= MAX_REQUESTS_PER_MINUTE:
-        return Response(content="Rate limit exceeded. Try again in a minute.", status_code=429)
-    _client_requests[client_ip].append(now)
+
+    with _rate_limit_lock:
+        # Prune empty IP keys
+        for ip in list(_client_requests.keys()):
+            active = [t for t in _client_requests[ip] if now - t < RATE_LIMIT_WINDOW]
+            if active:
+                _client_requests[ip] = active
+            else:
+                _client_requests.pop(ip, None)
+
+        for ip in list(_strict_requests.keys()):
+            active = [t for t in _strict_requests[ip] if now - t < RATE_LIMIT_WINDOW]
+            if active:
+                _strict_requests[ip] = active
+            else:
+                _strict_requests.pop(ip, None)
+
+        # Stricter limit of 6/min per IP on POST /api/assess/process and /api/assess/upload
+        if request.method == "POST" and path in ("/api/assess/process", "/api/assess/upload"):
+            strict_list = _strict_requests.get(client_ip, [])
+            if len(strict_list) >= STRICT_REQUESTS_PER_MINUTE:
+                retry_after = max(1, int(RATE_LIMIT_WINDOW - (now - strict_list[0])))
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Assessment rate limit exceeded. Maximum 6 uploads per minute."},
+                    headers={"Retry-After": str(retry_after)},
+                )
+            _strict_requests.setdefault(client_ip, []).append(now)
+
+        # General rate limit (120/min)
+        general_list = _client_requests.get(client_ip, [])
+        if len(general_list) >= MAX_REQUESTS_PER_MINUTE:
+            retry_after = max(1, int(RATE_LIMIT_WINDOW - (now - general_list[0])))
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Try again in a minute."},
+                headers={"Retry-After": str(retry_after)},
+            )
+        _client_requests.setdefault(client_ip, []).append(now)
 
     response: Response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
