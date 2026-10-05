@@ -62,6 +62,18 @@ RATE_LIMIT_WINDOW = 60
 MAX_REQUESTS_PER_MINUTE = 120
 STRICT_REQUESTS_PER_MINUTE = 6
 LLM_HOURLY_CAP = int(os.getenv("LLM_HOURLY_CAP", "60"))
+CSP_HEADER = (
+    "default-src 'self'; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+    "font-src https://fonts.gstatic.com; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "frame-ancestors 'none'; "
+    "base-uri 'none'; "
+    "form-action 'self'; "
+    "object-src 'none'"
+)
 
 _client_requests: dict[str, list[float]] = {}
 _strict_requests: dict[str, list[float]] = {}
@@ -78,6 +90,7 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Strict-Transport-Security"] = "max-age=31536000"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+        response.headers["Content-Security-Policy"] = CSP_HEADER
         return response
 
     forwarded = request.headers.get("x-forwarded-for")
@@ -129,6 +142,7 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     response.headers["Strict-Transport-Security"] = "max-age=31536000"
     response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = CSP_HEADER
     return response
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")

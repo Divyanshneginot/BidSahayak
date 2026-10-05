@@ -381,7 +381,7 @@ def test_security_headers_and_disabled_docs():
     assert res.status_code == 200
     assert res.headers.get("Strict-Transport-Security") == "max-age=31536000"
     assert res.headers.get("Permissions-Policy") == "camera=(), microphone=(), geolocation=()"
-    assert "Content-Security-Policy" not in res.headers
+    assert "default-src 'self'" in res.headers.get("Content-Security-Policy", "")
 
     # Docs disabled by default
     assert client.get("/docs").status_code == 404

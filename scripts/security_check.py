@@ -259,13 +259,14 @@ try:
 except Exception as e:
     record("A6_1: security headers & docs gate", False, str(e))
 
-# 17. Content-Security-Policy (CSP) header check (Expected to FAIL per instructions)
+# 17. Content-Security-Policy (CSP) header check
 try:
     res = client.get("/")
-    has_csp = "Content-Security-Policy" in res.headers
-    record("A6_2: Content-Security-Policy header present (FAIL EXPECTED: Do NOT add CSP yet)", has_csp)
+    csp_val = res.headers.get("Content-Security-Policy", "")
+    has_csp = "default-src 'self'" in csp_val and "style-src" in csp_val
+    record("B1: Content-Security-Policy header present and active", has_csp)
 except Exception as e:
-    record("A6_2: CSP header check", False, str(e))
+    record("B1: CSP header check", False, str(e))
 
 
 # Summary
@@ -275,13 +276,13 @@ total = len(results)
 
 print("\n" + "=" * 50)
 print(f"Summary: {pass_count}/{total} passed, {fail_count}/{total} failed.")
-if pass_count == 16 and fail_count == 1:
-    print("SUCCESS: Exactly 16/17 passing as expected (only CSP header check failed).")
+if pass_count == 17 and fail_count == 0:
+    print("SUCCESS: All 17/17 security checks passed.")
 else:
-    print(f"WARNING: Expected 16/17 passing, but got {pass_count}/{total}.")
+    print(f"WARNING: Expected 17/17 passing, but got {pass_count}/{total}.")
 print("=" * 50)
 
-if pass_count == 16 and fail_count == 1:
+if pass_count == 17 and fail_count == 0:
     sys.exit(0)
 else:
     sys.exit(1)
