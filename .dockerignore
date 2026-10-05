@@ -1,0 +1,9 @@
+.git
+.env*
+uploads
+tests
+sample_tenders/held_out
+shots
+__pycache__
+*.pyc
+.pytest_cache
