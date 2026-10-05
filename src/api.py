@@ -23,6 +23,8 @@ import starlette.middleware
 from fastapi.middleware.cors import CORSMiddleware as FastAPICORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
+from starlette.concurrency import run_in_threadpool
+import threading
 from collections import defaultdict
 import time
 
@@ -114,52 +116,94 @@ def _save_uploaded_pdf(file: UploadFile) -> str:
     return file_path
 
 
+_supervisor_lock = threading.Lock()
+_wait_counter_lock = threading.Lock()
+_waiting_requests_count = 0
+MAX_WAITING_REQUESTS = 3
+
+
+async def _run_guarded(func):
+    """Executes a synchronous callable in the threadpool under _supervisor_lock, limiting waiting queue to 3."""
+    global _waiting_requests_count
+    with _wait_counter_lock:
+        if _waiting_requests_count >= MAX_WAITING_REQUESTS:
+            raise HTTPException(status_code=503, detail="Busy, retry shortly")
+        _waiting_requests_count += 1
+
+    decremented = False
+
+    def in_thread():
+        nonlocal decremented
+        global _waiting_requests_count
+        with _supervisor_lock:
+            if not decremented:
+                with _wait_counter_lock:
+                    _waiting_requests_count -= 1
+                    decremented = True
+            return func()
+
+    try:
+        return await run_in_threadpool(in_thread)
+    finally:
+        if not decremented:
+            with _wait_counter_lock:
+                if not decremented:
+                    _waiting_requests_count -= 1
+                    decremented = True
+
+
 @app.post("/api/assess/upload")
 async def upload_tender_pdf(file: UploadFile = File(...)):
     """W1 + W2: Ingest PDF, extract text, detect sections, and return initial metadata."""
-    file_path = _save_uploaded_pdf(file)
-    try:
-        ingest_result = ingest_worker.process(file_path)
-        if not ingest_result.is_valid:
-            raise HTTPException(status_code=400, detail=ingest_result.rejection_reason)
-
-        extraction = text_worker.process(file_path, tender_id=ingest_result.tender_id)
-
-        return {
-            "tender_id": ingest_result.tender_id,
-            "file_name": ingest_result.file_name,
-            "page_count": ingest_result.page_count,
-            "sha256": ingest_result.sha256_hash,
-            "is_scanned": extraction.is_scanned_document,
-        "skipped_pages": extraction.skipped_pages,
-        "is_ocr_available": extraction.is_ocr_available,
-            "detected_sections": extraction.detected_sections,
-            "pages_summary": [
-                {"page": p_num, "chars": p_data.char_count, "is_scanned": p_data.is_scanned_likely}
-                for p_num, p_data in extraction.pages.items()
-            ],
-        }
-    finally:
+    def _execute():
+        file_path = _save_uploaded_pdf(file)
         try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except OSError:
-            pass
+            ingest_result = ingest_worker.process(file_path)
+            if not ingest_result.is_valid:
+                raise HTTPException(status_code=400, detail=ingest_result.rejection_reason)
+
+            extraction = text_worker.process(file_path, tender_id=ingest_result.tender_id)
+
+            return {
+                "tender_id": ingest_result.tender_id,
+                "file_name": ingest_result.file_name,
+                "page_count": ingest_result.page_count,
+                "sha256": ingest_result.sha256_hash,
+                "is_scanned": extraction.is_scanned_document,
+                "skipped_pages": extraction.skipped_pages,
+                "is_ocr_available": extraction.is_ocr_available,
+                "detected_sections": extraction.detected_sections,
+                "pages_summary": [
+                    {"page": p_num, "chars": p_data.char_count, "is_scanned": p_data.is_scanned_likely}
+                    for p_num, p_data in extraction.pages.items()
+                ],
+            }
+        finally:
+            try:
+                if file_path and os.path.exists(file_path):
+                    os.remove(file_path)
+            except OSError:
+                pass
+
+    return await _run_guarded(_execute)
 
 
 @app.post("/api/assess/process")
 async def process_full_tender(file: UploadFile = File(...)):
     """Runs Supervisor end-to-end: W1 Ingest -> W2 Text -> W4 Extract -> Trace."""
-    file_path = _save_uploaded_pdf(file)
-    try:
-        session = supervisor.process_document(file_path)
-        return session
-    finally:
+    def _execute():
+        file_path = _save_uploaded_pdf(file)
         try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-        except OSError:
-            pass
+            session = supervisor.process_document(file_path)
+            return session
+        finally:
+            try:
+                if file_path and os.path.exists(file_path):
+                    os.remove(file_path)
+            except OSError:
+                pass
+
+    return await _run_guarded(_execute)
 
 
 @app.post("/api/assess/evaluate", response_model=BidVerdict)

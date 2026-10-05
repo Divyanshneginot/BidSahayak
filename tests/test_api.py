@@ -169,3 +169,37 @@ def test_security_path_traversal_and_magic_bytes():
     )
     assert res_fake.status_code == 400
     assert "missing valid PDF header" in res_fake.json()["detail"]
+
+
+def test_concurrency_lock_and_queue_limit():
+    import threading
+    import time
+    from src.api import _supervisor_lock
+
+    fake_pdf = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF"
+
+    _supervisor_lock.acquire()
+    threads = []
+    try:
+        for _ in range(3):
+            t = threading.Thread(
+                target=lambda: client.post(
+                    "/api/assess/upload",
+                    files={"file": ("test.pdf", fake_pdf, "application/pdf")},
+                )
+            )
+            t.start()
+            threads.append(t)
+
+        time.sleep(0.15)
+
+        res = client.post(
+            "/api/assess/upload",
+            files={"file": ("test.pdf", fake_pdf, "application/pdf")},
+        )
+        assert res.status_code == 503
+        assert "Busy, retry shortly" in res.json()["detail"]
+    finally:
+        _supervisor_lock.release()
+        for t in threads:
+            t.join()
