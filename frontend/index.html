@@ -6,7 +6,7 @@
 <title>BidSahayak — Can I bid on this one?</title>
 <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#101010" media="(prefers-color-scheme: dark)">
-<meta name="description" content="BidSahayak reads Indian government tender PDFs, extracts every eligibility requirement, compares them against your profile, and answers in about three seconds: can I bid on this one?">
+<meta name="description" content="BidSahayak reads Indian government tender PDFs, extracts every eligibility requirement, compares them against your profile, and answers in under a minute: can I bid on this one?">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' fill='%23EBFF00'/><text y='70' x='18' font-size='55' font-family='sans-serif' font-weight='900' fill='%23080707'>BS</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
 <script>try{var t=localStorage.getItem("bs-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
 <meta property="og:type" content="website">
 <meta property="og:title" content="BidSahayak — Can I bid on this one?">
-<meta property="og:description" content="Upload a government tender PDF and see in about three seconds whether your MSME is eligible. A person approves every field; the tool never submits a bid.">
+<meta property="og:description" content="Upload a government tender PDF and see in under a minute whether your MSME is eligible. A person approves every field; the tool never submits a bid.">
 <meta name="twitter:card" content="summary">
 <style>
 /* ============ TOKENS ============ */
@@ -781,7 +781,7 @@ footer.site :focus-visible{outline-color:#f5f5f5}
     <div>
       <p class="kicker" data-i18n="hero.kicker">Eligibility copilot · Government tenders · India</p>
       <h1 class="hero-title" data-i18n-html="hero.title">Can I bid on <span class="mark">this one?</span></h1>
-      <p class="hero-sub" data-i18n="hero.sub">Upload a tender PDF — English or Hindi, scanned copies included. BidSahayak reads it, extracts every eligibility requirement, compares them against your profile, and answers in about three seconds. Every missing item named. Every number linked to the page it came from.</p>
+      <p class="hero-sub" data-i18n="hero.sub">Upload a tender PDF — English or Hindi. Text-based PDFs; pages without a readable text layer are flagged and skipped. BidSahayak reads it, extracts every eligibility requirement, compares them against your profile, and answers in under a minute. Every missing item named. Every number linked to the page it came from.</p>
       <p class="hero-note" data-i18n="hero.note">A human approves the assessment field by field. The tool never submits a bid on your behalf.</p>
 
       <div class="upload-zone">
@@ -795,7 +795,7 @@ footer.site :focus-visible{outline-color:#f5f5f5}
           </span>
           <span class="dz-text">
             <strong data-i18n="dz.title">Drop a tender PDF here, or browse</strong>
-            <span id="dz-hint" data-i18n="dz.hint">PDF · up to 25 MB · English or Hindi · scanned copies OK</span>
+            <span id="dz-hint" data-i18n="dz.hint">PDF · up to 25 MB · English or Hindi · text-based (pages without text layer skipped)</span>
           </span>
         </button>
         <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
@@ -838,6 +838,14 @@ footer.site :focus-visible{outline-color:#f5f5f5}
               <input type="number" id="pfYears" value="5" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
             </div>
             <div>
+              <label for="pfPastWork" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Largest single completed similar work (INR)</label>
+              <input type="number" id="pfPastWork" placeholder="Optional (leave blank if unknown)" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
+              <label for="pfNetWorth" style="display:block;font-family:var(--mono);font-size:.7rem;margin-bottom:.2rem">Net worth (INR)</label>
+              <input type="number" id="pfNetWorth" placeholder="Optional (leave blank if unknown)" style="width:100%;padding:.4rem;background:var(--card-tint);border:1px solid var(--line);color:var(--ink);font-family:inherit">
+            </div>
+            <div>
               <label style="display:flex;align-items:center;gap:.4rem;font-family:var(--mono);font-size:.75rem;margin-top:.6rem">
                 <input type="checkbox" id="pfDsc" checked> Holds Class-3 DSC
               </label>
@@ -855,7 +863,7 @@ footer.site :focus-visible{outline-color:#f5f5f5}
         </details>
 
         <div class="upload-or" data-i18n="dz.or">no tender at hand?</div>
-        <a class="btn btn-primary" href="#demo" id="workedBtn"><span data-i18n="dz.worked">Run the worked example</span><span class="arrow" aria-hidden="true">→</span></a>
+        <a class="btn btn-primary" href="#demo" id="workedBtn"><span data-i18n="dz.worked">Run the worked example (illustrative)</span><span class="arrow" aria-hidden="true">→</span></a>
       </div>
     </div>
 
@@ -941,7 +949,7 @@ footer.site :focus-visible{outline-color:#f5f5f5}
     <div class="sec-head rv">
       <div class="sec-label">
         <span class="num">02 / WORKED EXAMPLE</span>
-        <h2 id="demo-h" data-i18n="demo.h">Three seconds,
+        <h2 id="demo-h" data-i18n="demo.h">Under a minute,
 field by field</h2>
         <span class="dev-sub">लाइव उदाहरण</span>
       </div>
@@ -957,7 +965,7 @@ field by field</h2>
       <div class="demo-steps" role="list">
         <div class="dstep" role="listitem" id="ds0">
           <div class="s-name"><b>01 Search</b><span>खोज</span></div>
-          <div class="s-state" data-i18n="ds.0">scanning pages…</div>
+          <div class="s-state" data-i18n="ds.0">reading pages…</div>
           <div class="s-bar"><i></i></div>
         </div>
         <div class="dstep" role="listitem" id="ds1">
@@ -978,7 +986,7 @@ field by field</h2>
       </div>
       <div class="demo-log" id="demoLog" aria-live="polite">
         <div class="ln t show">$ bidsahayak check --tender NIT-CPU-52-0519-9913.pdf --profile msme-demo</div>
-        <div class="ln">· 9 pages scanned · English + Hindi text layer (OCR fallback on p.1)</div>
+        <div class="ln">· 9 pages parsed · English + Hindi text layer (pages without text layer skipped)</div>
         <div class="ln ok">12 eligibility clauses located across pages 1–9</div>
         <div class="ln ok">9 fields extracted · EMD ₹1,20,000 · turnover ₹1.5 Cr · 3 similar works · OEM authorisation …</div>
         <div class="ln ok">snippet verification passed for 8 fields (exact text found on cited page)</div>
@@ -990,7 +998,7 @@ field by field</h2>
     </div>
 
     <div class="demo-cta">
-      <button class="btn btn-primary" id="runDemo"><span data-i18n="demo.run">Run the check</span><span class="arrow" aria-hidden="true">▸</span></button>
+      <button class="btn btn-primary" id="runDemo"><span data-i18n="demo.run">Run the worked example (illustrative)</span><span class="arrow" aria-hidden="true">▸</span></button>
       <a class="btn btn-ghost" href="#result" data-i18n="demo.skip">Skip to the verdict</a>
     </div>
     <p class="demo-note" style="margin-top:1rem" data-i18n="demo.note">Demo data is representative, shown against a real tender reference; the one verbatim line is the officer-marked sentence from page 1. In the live product nothing is fabricated — a snippet that is not found on its cited page is rejected outright.</p>
@@ -1003,6 +1011,7 @@ field by field</h2>
     <div class="sec-head rv">
       <div class="sec-label">
         <span class="num">03 / RESULT</span>
+        <span class="illustrative-badge" id="resIllustrativeBadge" style="display:inline-block;padding:.2rem .6rem;background:var(--mustard);color:var(--paper);font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem">ILLUSTRATIVE EXAMPLE — not your upload</span>
         <h2 id="res-h" data-i18n="res.h">The verdict,
 in plain words</h2>
         <span class="dev-sub">परिणाम</span>
@@ -1098,6 +1107,7 @@ in plain words</h2>
     <div class="sec-head rv">
       <div class="sec-label">
         <span class="num">04 / SOURCE VIEW</span>
+        <span class="illustrative-badge" style="display:inline-block;padding:.2rem .6rem;background:var(--mustard);color:var(--paper);font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem">ILLUSTRATIVE EXAMPLE — not your upload</span>
         <h2 id="src-h" data-i18n="src.h">Check every claim
 against the original</h2>
         <span class="dev-sub">मूल दस्तावेज़</span>
@@ -1135,6 +1145,7 @@ against the original</h2>
     <div class="sec-head rv">
       <div class="sec-label">
         <span class="num">05 / ACTION LIST</span>
+        <span class="illustrative-badge" style="display:inline-block;padding:.2rem .6rem;background:var(--mustard);color:var(--paper);font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem">ILLUSTRATIVE EXAMPLE — not your upload</span>
         <h2 id="act-h" data-i18n="act.h">What to do next</h2>
         <span class="dev-sub">अगले कदम</span>
       </div>
@@ -1166,6 +1177,7 @@ against the original</h2>
     <div class="sec-head rv">
       <div class="sec-label">
         <span class="num">06 / TRACE</span>
+        <span class="illustrative-badge" style="display:inline-block;padding:.2rem .6rem;background:var(--mustard);color:var(--paper);font-family:var(--mono);font-size:.68rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;margin-bottom:.5rem">ILLUSTRATIVE EXAMPLE — not your upload</span>
         <h2 id="tr-h" data-i18n="tr.h">How the agent
 decided</h2>
         <span class="dev-sub">निर्णय का पता</span>
@@ -1182,8 +1194,8 @@ decided</h2>
         <div class="trace-lane rv">
           <div class="tcell">
             <h3>Search <i>01</i></h3>
-            <p data-i18n="tr.1">Pages scanned and indexed; English and Hindi text layers merged, OCR fallback for the scanned first page.</p>
-            <div class="t-stat">pages <b>9</b> · clauses located <b>12</b> · OCR pages <b>1</b></div>
+            <p data-i18n="tr.1">Pages parsed and indexed; English and Hindi text layers merged, pages without readable text layer flagged and skipped.</p>
+            <div class="t-stat">pages <b>9</b> · clauses located <b>12</b> · skipped pages <b>0</b></div>
             <span class="t-arrow" aria-hidden="true">→</span>
           </div>
           <div class="tcell">
@@ -1237,7 +1249,7 @@ never do</h2>
       <div class="rule"><b data-i18n="ru2.t">Every field cites its page</b><p data-i18n="ru2.p">Each extracted field carries confidence, source page and source snippet. A snippet not found on the cited page is rejected outright.</p></div>
       <div class="rule"><b data-i18n="ru3.t">0.7 confidence floor</b><p data-i18n="ru3.p">Fields below 0.7 confidence are excluded from the verdict until a human confirms them.</p></div>
       <div class="rule"><b data-i18n="ru4.t">Nothing fabricated</b><p data-i18n="ru4.p">No invented statistics, quotes, participants or documents — in the product, or on this page.</p></div>
-      <div class="rule"><b data-i18n="ru5.t">Hindi &amp; English</b><p data-i18n="ru5.p">Tenders and answers in both languages. Scanned copies included. Graceful degradation without JavaScript; keyboard and screen-reader accessible; light and dark schemes.</p></div>
+      <div class="rule"><b data-i18n="ru5.t">Hindi &amp; English</b><p data-i18n="ru5.p">Tenders and answers in both languages. Text-based PDFs; pages without a readable text layer are flagged and skipped. Graceful degradation without JavaScript; keyboard and screen-reader accessible; light and dark schemes.</p></div>
       <div class="rule"><b data-i18n="ru6.t">Never submits</b><p data-i18n="ru6.p">A human approves the assessment field by field. BidSahayak never submits a bid on the user's behalf.</p></div>
     </div>
   </div>
@@ -1249,7 +1261,7 @@ never do</h2>
     <div class="f-top">
       <div class="f-brandcol">
         <p class="f-brand" aria-label="BidSahayak">Bid<span class="mark-solid">Sahayak</span></p>
-        <p class="f-tag" lang="hi">दस्तावेज़ हम पढ़ते हैं। तीन सेकंड में। हिंदी में।</p>
+        <p class="f-tag" lang="hi">दस्तावेज़ हम पढ़ते हैं। एक मिनट से कम में। हिंदी में।</p>
         <p class="f-guard" data-i18n="f.guard">BidSahayak evaluates. A person approves. It never submits a bid on your behalf.</p>
       </div>
       <div class="f-meta">
@@ -1337,7 +1349,7 @@ never do</h2>
     dz.removeAttribute("aria-busy");
     var t=dz.querySelector(".dz-text strong"),h=dz.querySelector(".dz-text span");
     if(t)t.textContent=dict[cur]["dz.title"]||"Drop a tender PDF here, or browse";
-    if(h)h.textContent=dict[cur]["dz.hint"]||"PDF · up to 25 MB · English or Hindi · scanned copies OK";
+    if(h)h.textContent=dict[cur]["dz.hint"]||"PDF · up to 25 MB · English or Hindi · text-based (pages without text layer skipped)";
   }
 
   var currentSession = null;
@@ -1347,6 +1359,13 @@ never do</h2>
     var turnovers = pfT.split(",").map(function(s){return parseInt(s.trim())||0}).filter(function(n){return n>0});
     if(!turnovers.length) turnovers = [42000000];
     var certs = ($("#pfCerts") ? $("#pfCerts").value : "ISO 9001, MSME").split(",").map(function(s){return s.trim()}).filter(Boolean);
+    var pwEl = $("#pfPastWork");
+    var pastWorkVal = (pwEl && pwEl.value.trim() !== "") ? parseInt(pwEl.value.trim(), 10) : null;
+    if(isNaN(pastWorkVal)) pastWorkVal = null;
+    var nwEl = $("#pfNetWorth");
+    var netWorthVal = (nwEl && nwEl.value.trim() !== "") ? parseInt(nwEl.value.trim(), 10) : null;
+    if(isNaN(netWorthVal)) netWorthVal = null;
+
     return {
       business_name: $("#pfName") ? $("#pfName").value : "Sahayak Tech Solutions",
       state: $("#pfState") ? $("#pfState").value : "Uttar Pradesh",
@@ -1358,6 +1377,8 @@ never do</h2>
       annual_turnover_last_3y: turnovers,
       years_in_business: $("#pfYears") ? parseInt($("#pfYears").value)||0 : 5,
       certifications_held: certs,
+      past_work_max_value: pastWorkVal,
+      net_worth: netWorthVal,
       holds_class3_dsc: !!($("#pfDsc") && $("#pfDsc").checked),
       startup_india: false
     };
@@ -1385,6 +1406,8 @@ never do</h2>
       if(p.udyam_valid_until && $("#pfUdyamValid")) $("#pfUdyamValid").value = p.udyam_valid_until;
       if(p.state && $("#pfState")) $("#pfState").value = p.state;
       if(p.years_in_business != null && $("#pfYears")) $("#pfYears").value = p.years_in_business;
+      if(p.past_work_max_value != null && $("#pfPastWork")) $("#pfPastWork").value = p.past_work_max_value;
+      if(p.net_worth != null && $("#pfNetWorth")) $("#pfNetWorth").value = p.net_worth;
       if($("#pfTrader")) $("#pfTrader").checked = !!p.is_trading;
       if($("#pfDsc")) $("#pfDsc").checked = p.holds_class3_dsc !== false;
       if(p.certifications_held && $("#pfCerts")) $("#pfCerts").value = p.certifications_held.join(", ");
@@ -1399,6 +1422,8 @@ never do</h2>
 
   function renderLiveAssessment(data){
     if(!data)return;
+    var resBadge=$("#resIllustrativeBadge");
+    if(resBadge) resBadge.style.display="none";
     var kicker=$("[data-i18n='res.kicker']");
     if(data.verdict && data.verdict.overall){
       var biz = (data.profile && data.profile.business_name) || getVendorProfile().business_name || "Sahayak Tech Solutions";
@@ -1437,10 +1462,11 @@ never do</h2>
           v.verdicts.forEach(function(row,idx){
             var isMet=row.status==="met";
             var isExempt=row.status==="waived";
+            var isUnknown=row.status==="unknown";
             if(isMet)metCount++;
             if(isExempt)exemptCount++;
-            var statusClass=isMet?"met":(isExempt?"exempt":(row.status==="gap"?"gap":(row.status==="not-applicable"?"review":"miss")));
-            var statusLabel=isMet?"Met":(isExempt?"Exempt":(row.status==="gap"?"Gap":(row.status==="not-applicable"?"N/A":"Missing")));
+            var statusClass=isMet?"met":(isExempt?"exempt":(row.status==="gap"?"gap":(isUnknown?"review":(row.status==="not-applicable"?"review":"miss"))));
+            var statusLabel=isMet?"Met":(isExempt?"Exempt":(row.status==="gap"?"Gap":(isUnknown?"needs input":(row.status==="not-applicable"?"N/A":"Missing"))));
             
             var rowEl=document.createElement("div");
             rowEl.className="req-row";
@@ -1469,7 +1495,7 @@ never do</h2>
                     matrix: matrixObj,
                     profile: getVendorProfile(),
                     field_name: reqName,
-                    override_note: "Approved by human operator"
+                    operator_note: "Approved by human operator"
                   })
                 })
                 .then(function(r){ return r.ok ? r.json() : null; })
@@ -1625,7 +1651,7 @@ never do</h2>
       lines.forEach(function(l){l.classList.add("show")});
       steps.forEach(function(s){s.classList.add("ok");s.querySelector(".s-bar i").style.width="100%"});
       bar.classList.remove("run");bar.classList.add("done");
-      if(timer)timer.textContent="3.0s (illustrative)";
+      if(timer)timer.textContent="under a minute (illustrative)";
       running=false;
       var r=$("#result");
       if(r)r.scrollIntoView({behavior:"auto"});
@@ -1728,17 +1754,17 @@ never do</h2>
     "err.tooLarge":"File exceeds 25 MB limit. Please upload a smaller tender PDF.",
     "err.liveFail":"Live assessment service unavailable. You can run the worked example below."
   },
-  hi:{approve:"स्वीकृत",approveDone:"स्वीकृत ✓","ds.0":"पृष्ठ स्कैन हो रहे हैं…","ds.1":"पात्रता शर्तें निकाली जा रही हैं…","ds.2":"पृष्ठ पर अंश की जाँच…","ds.3":"बोलीदाता प्रोफ़ाइल से तुलना…","evl.1":"सड़क टेंडर, उत्तर प्रदेश","evl.2":"ई-प्रोक्योरमेंट, तमिलनाडु","evl.3":"एक PSU टेंडर","evl.4":"पंजीकृत उद्यम","evl.5":"GeM पर","evl.6":"मानवीय मदद","f.guard":"BidSahayak मूल्यांकन करता है। स्वीकृति मनुष्य देता है। यह आपकी ओर से कभी बोली जमा नहीं करता।","f.when":"ट्रैक 01: एजेंटिक AI · 4–5 अक्टूबर 2026 · 30 घंटे का ऑनलाइन हैकाथॉन","f.judged":"मूल्यांकन के मानदंड — देखें इस पेज पर कहाँ दिखाए गए हैं","f.top":"ऊपर जाएँ","f.c1":"साक्ष्य","f.c2":"कार्यक्षमता","f.c3":"गुणवत्ता","f.c4":"मौलिकता","f.c5":"उपयोगिता","f.c6":"उत्तरदायित्व",
+  hi:{approve:"स्वीकृत",approveDone:"स्वीकृत ✓","ds.0":"पृष्ठ पढ़े और अनुक्रमित हो रहे हैं…","ds.1":"पात्रता शर्तें निकाली जा रही हैं…","ds.2":"पृष्ठ पर अंश की जाँच…","ds.3":"बोलीदाता प्रोफ़ाइल से तुलना…","evl.1":"सड़क टेंडर, उत्तर प्रदेश","evl.2":"ई-प्रोक्योरमेंट, तमिलनाडु","evl.3":"एक PSU टेंडर","evl.4":"पंजीकृत उद्यम","evl.5":"GeM पर","evl.6":"मानवीय मदद","f.guard":"BidSahayak मूल्यांकन करता है। स्वीकृति मनुष्य देता है। यह आपकी ओर से कभी बोली जमा नहीं करता।","f.when":"ट्रैक 01: एजेंटिक AI · 4–5 अक्टूबर 2026 · 30 घंटे का ऑनलाइन हैकाथॉन","f.judged":"मूल्यांकन के मानदंड — देखें इस पेज पर कहाँ दिखाए गए हैं","f.top":"ऊपर जाएँ","f.c1":"साक्ष्य","f.c2":"कार्यक्षमता","f.c3":"गुणवत्ता","f.c4":"मौलिकता","f.c5":"उपयोगिता","f.c6":"उत्तरदायित्व",
     "nav.evidence":"साक्ष्य","nav.demo":"डेमो","nav.result":"परिणाम","nav.source":"स्रोत","nav.trace":"ट्रेस",
     "hero.kicker":"पात्रता सहायक · सरकारी टेंडर · भारत",
     "hero.title":"क्या मैं इस पर<br><span class=\"mark\">बोली लगा सकता हूँ?</span>",
-    "hero.sub":"टेंडर PDF अपलोड करें — अंग्रेज़ी या हिंदी, स्कैन की हुई कॉपी भी। BidSahayak उसे पढ़ता है, हर पात्रता शर्त निकालता है, आपकी प्रोफ़ाइल से तुलना करता है, और करीब तीन सेकंड में जवाब देता है। हर कमी का नाम। हर आंकड़ा उस पृष्ठ से जुड़ा, जहाँ से आया।",
+    "hero.sub":"टेंडर PDF अपलोड करें — अंग्रेज़ी या हिंदी, केवल टेक्स्ट-आधारित PDF (बिना टेक्स्ट लेयर वाले पृष्ठ छोड़ दिए जाते हैं)। BidSahayak उसे पढ़ता है, हर पात्रता शर्त निकालता है, आपकी प्रोफ़ाइल से तुलना करता है, और एक मिनट से कम में जवाब देता है। हर कमी का नाम। हर आंकड़ा उस पृष्ठ से जुड़ा, जहाँ से आया।",
     "hero.note":"मूल्यांकन को मनुष्य क्षेत्र-दर-क्षेत्र स्वीकृत करता है। यह उपकरण आपकी ओर से कभी बोली नहीं लगाता।",
     "hero.marknote":"2019 की एक असली IMD टेंडर पृष्ठ पर इस वाक्य पर अधिकारी के पीले हाइलाइटर का निशान है। BidSahayak ऐसे निशानों के आसपास की हर चीज़ स्वचालित करता है — और उन्हें कभी मिटाता नहीं।",
     "dz.title":"टेंडर PDF यहाँ छोड़ें, या ब्राउज़ करें",
-    "dz.hint":"PDF · 25 MB तक · अंग्रेज़ी या हिंदी · स्कैन कॉपी चलेगी",
+    "dz.hint":"PDF · 25 MB तक · अंग्रेज़ी या हिंदी · केवल टेक्स्ट-आधारित PDF (बिना टेक्स्ट लेयर वाले पृष्ठ छोड़े जाते हैं)",
     "dz.or":"पास में टेंडर नहीं है?",
-    "dz.worked":"उदाहरण चलाकर देखें",
+    "dz.worked":"उदाहरण चलाकर देखें (दृष्टांत)",
     "dz.uploading":"BidSahayak सुपरवाइज़र के साथ टेंडर अपलोड और विश्लेषण जारी है…",
     "dz.success":"मूल्यांकन पूर्ण ✓ (लाइव टेंडर डेटा लोड हुआ)",
     "err.pdfOnly":"अमान्य फ़ाइल प्रारूप: कृपया एक मान्य PDF दस्तावेज़ (.pdf) अपलोड करें।",
@@ -1755,8 +1781,8 @@ never do</h2>
     "ev.5":"GeM पर आपूर्ति करने वाले 58.83% MSE केवल एक ही राज्य के भीतर बिक्री करते हैं (1.52 लाख+ उद्यम)।",
     "ev.6":"योजना के पहले बैच में प्रशिक्षित “कॉरपोरेट मित्र” — मुख्यतः टियर-II और टियर-III शहरों के MSME के लिए। मानवीय मदद सीमित है; पढ़ने वाला सॉफ्टवेयर बड़े पैमाने पर काम करता है।",
     "ev.7":"2019 के एक असली IMD टेंडर दस्तावेज़ पर अधिकारी के पीले हाइलाइटर का निशान है — “Manual bids shall not be accepted.” वाक्य पर। BidSahayak ऐसे निशानों के आसपास की हर चीज़ स्वचालित करता है — और उन्हें कभी मिटाता नहीं।",
-    "demo.h":"तीन सेकंड,\nक्षेत्र-दर-क्षेत्र","demo.intro":"एक असली टेंडर संदर्भ — IMD NIT CPU/52/0519/9913 (2019) — और एक नमूना Udyam-पंजीकृत सूक्ष्म उद्यम प्रोफ़ाइल पर डेमो रन। एजेंट को खोजते, निकालते, सत्यापित करते और तुलना करते देखें।",
-    "demo.console":"एजेंट कंसोल","demo.run":"जाँच चलाएँ","demo.skip":"सीधे निष्कर्ष देखें",
+    "demo.h":"एक मिनट से कम,\nक्षेत्र-दर-क्षेत्र","demo.intro":"एक असली टेंडर संदर्भ — IMD NIT CPU/52/0519/9913 (2019) — और एक नमूना Udyam-पंजीकृत सूक्ष्म उद्यम प्रोफ़ाइल पर डेमो रन। एजेंट को खोजते, निकालते, सत्यापित करते और तुलना करते देखें।",
+    "demo.console":"एजेंट कंसोल","demo.run":"उदाहरण चलाकर देखें (दृष्टांत)","demo.skip":"सीधे निष्कर्ष देखें",
     "demo.note":"डेमो डेटा प्रतिनिधिक है, असली टेंडर संदर्भ पर दिखाया गया है; एकमात्र शब्दशः पंक्ति पृष्ठ 1 की अधिकारी-चिह्नित पंक्ति है। लाइव उत्पाद में कुछ भी गढ़ा नहीं जाता — जो snippet अपने उद्धृत पृष्ठ पर न मिले, उसे तुरंत अस्वीकार कर दिया जाता है।",
     "res.h":"निष्कर्ष,\nसादी भाषा में","res.intro":"न दोबारा PDF पढ़नी है, न कंसल्टेंट को फोन करना है। सादी भाषा में निष्कर्ष, हर कमी या जोखिम अपने स्रोत पृष्ठ के साथ, और वे छूट जो कंसल्टेंट शायद ही बताते हैं — स्पष्ट रूप से लिखी हुईं।",
     "res.kicker":"निष्कर्ष · NIT CPU/52/0519/9913 · नमूना MSME प्रोफ़ाइल",
@@ -1776,7 +1802,7 @@ never do</h2>
     "gate.p":"<b>मानव अनुमोदन द्वार।</b> जब तक आप क्षेत्र-दर-क्षेत्र स्वीकृत न करें, कुछ भी अंतिम नहीं। ऊपर हर पंक्ति की समीक्षा करें — फिर अपनी कार्य-सूची बनाएँ।",
     "gate.btn":"कार्य-सूची बनाएँ",
     "src.h":"हर दावे की जाँच\nमूल दस्तावेज़ से","src.intro":"बाईं ओर टेंडर का उद्धृत पृष्ठ, दाईं ओर निकाला गया पाठ। एक नज़र में हर दावे की पुष्टि करें — जो snippet अपने पृष्ठ पर न मिले, अस्वीकृत।",
-    "src.slot":"दस्तावेज़ स्थान — पृष्ठ 1 का स्कैन, NIT CPU/52/0519/9913 (IMD, 2019), अधिकारी के हाइलाइटर निशान सहित, यहाँ रखा जाएगा। कोई जनरेट किया विकल्प उपयोग नहीं होता।",
+    "src.slot":"दस्तावेज़ स्थान — पृष्ठ 1 की छवि, NIT CPU/52/0519/9913 (IMD, 2019), अधिकारी के हाइलाइटर निशान सहित, यहाँ रखा जाएगा। कोई जनरेट किया विकल्प उपयोग नहीं होता।",
     "src.extracted":"निकाला गया · सत्यापित",
     "src.f1":"जमा करने का तरीका","src.v1":"केवल ऑनलाइन — <span class=\"mark\">मैनुअल बोलियाँ स्वीकार नहीं</span>",
     "src.v2":"उद्धृत पृष्ठ पर सटीक snippet मिला — निर्णायक जाँच, मॉडल की राय नहीं",
@@ -1793,7 +1819,7 @@ never do</h2>
     "tr.h":"एजेंट ने कैसे\nतय किया","tr.intro":"जजों के लिए: पूरा तर्क-पथ, प्रत्येक क्षेत्र का आत्मविश्वास सहित। बोलीदाता प्रोफ़ाइल से तुलना निर्णायक कोड है — LLM केवल वहाँ उपयोग होता है जहाँ भाषा अस्पष्ट हो। हर विफलता “मानव समीक्षा” में जाती है, अनुमान में नहीं।",
     "tr.sumTitle":"तकनीकी पाइपलाइन ट्रेस और ऑडिट लॉग",
     "tr.sumHint":"जजों के लिए: 4-चरणीय पाइपलाइन और विश्वास स्तर देखने के लिए क्लिक करें",
-    "tr.1":"पृष्ठ स्कैन और अनुक्रमित; अंग्रेज़ी-हिंदी टेक्स्ट परतें मर्ज, स्कैन किए गए पहले पृष्ठ के लिए OCR।",
+    "tr.1":"पृष्ठ पढ़े और अनुक्रमित; अंग्रेज़ी-हिंदी टेक्स्ट परतें मर्ज; बिना टेक्स्ट लेयर वाले पृष्ठ छोड़ दिए जाते हैं।",
     "tr.2":"हर खंड एक संरचित क्षेत्र बनता है: शर्त, मान, स्रोत पृष्ठ, स्रोत snippet, आत्मविश्वास।",
     "tr.3":"निर्णायक snippet-on-page जाँच। उद्धृत पाठ उद्धृत पृष्ठ पर मिलना चाहिए, वरना क्षेत्र अस्वीकृत।",
     "tr.4":"क्षेत्र बनाम बोलीदाता प्रोफ़ाइल, निर्णायक कोड में। LLM केवल एक अस्पष्ट खंड को छूता है — और फिर भी मनुष्य के पास भेजता है।",
@@ -1805,7 +1831,7 @@ never do</h2>
     "ru2.t":"हर क्षेत्र अपना पृष्ठ उद्धृत करता है","ru2.p":"प्रत्येक निकाले गए क्षेत्र में आत्मविश्वास, स्रोत पृष्ठ और snippet होता है। पृष्ठ पर न मिलने वाला snippet तुरंत अस्वीकृत।",
     "ru3.t":"0.7 आत्मविश्वास सीमा","ru3.p":"0.7 से नीचे क्षेत्र निष्कर्ष से बाहर, जब तक मनुष्य पुष्टि न करे।",
     "ru4.t":"कुछ भी गढ़ा नहीं","ru4.p":"न गढ़े आंकड़े, न उद्धरण, न सहभागी, न दस्तावेज़ — उत्पाद में, न इस पृष्ठ पर।",
-    "ru5.t":"हिंदी और अंग्रेज़ी","ru5.p":"दोनों भाषाओं में टेंडर और जवाब। स्कैन कॉपी समेत। JavaScript के बिना सुगम्य पहला फ्रेम; कीबोर्ड और स्क्रीन-रीडर सुलभ; हल्का और गहरा रूप।",
+    "ru5.t":"हिंदी और अंग्रेज़ी","ru5.p":"दोनों भाषाओं में टेंडर और जवाब। केवल टेक्स्ट-आधारित PDF; बिना टेक्स्ट लेयर वाले पृष्ठ छोड़ दिए जाते हैं। JavaScript के बिना सुगम्य पहला फ्रेम; कीबोर्ड और स्क्रीन-रीडर सुलभ; हल्का और गहरा रूप।",
     "ru6.t":"कभी जमा नहीं करता","ru6.p":"मनुष्य मूल्यांकन को क्षेत्र-दर-क्षेत्र स्वीकृत करता है। BidSahayak उपयोगकर्ता की ओर से कभी बोली जमा नहीं करता।",
     "f.demo":"डेमो डेटा प्रतिनिधिक है, असली टेंडर संदर्भ NIT CPU/52/0519/9913 (IMD, 2019) पर दिखाया गया है। इस पृष्ठ के आंकड़े CAG, MSME मंत्रालय, GeM और केंद्रीय बजट स्रोतों से उद्धृत हैं।"
   }};

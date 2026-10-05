@@ -18,7 +18,7 @@
 - [x] **Interactive Human-in-the-Loop UI**: Single-screen UI with EN/HI toggle, dark theme, trace panel, and operator override.
 - [x] **Rule 04 Disclosure**: `PRIOR_WORK.md` disclosing pre-event domain knowledge with zero prior code reuse.
 - [x] **Security Sweep**: Zero credentials or API keys in Git history.
-- [ ] **Live Deployed URL**: [Deploy to Render / Railway using `render.yaml` or `Dockerfile`]
+- [x] **Live Deployed URL**: https://bidsahayak.onrender.com/
 - [x] **Demo Video**: [BidSahayak YouTube Demo](https://youtu.be/7W3jbwHY0yM)
 
 ---
@@ -29,7 +29,7 @@
 |---|---|---|---|
 | **0:00 – 0:20** | Landing Page hero + CAG statistic card | *"In Uttar Pradesh, 73% of road tenders receive only 1 or 2 bids — not because contractors can't do the work, but because eligibility is buried in 30-page documents. That information wall is what BidSahayak breaks."* | **User Insight & Problem Evidence (15 pts)** |
 | **0:20 – 0:40** | Real IMD Tender PDF ([sample_tenders/imd-tender.pdf](sample_tenders/imd-tender.pdf)) | *"Here is a real tender from the Meteorological Department. Clause 5 says EMD is ₹10,000. But the exemption for micro-enterprises is 5 pages away in Clause 6(a), subject to trading restrictions and opening-date validity."* | **Originality & Real-World Usability (15+12 pts)** |
-| **0:40 – 1:10** | **Live Action:** Drop PDF into BidSahayak console | *"Watch the agent work. In 3 seconds, it normalizes Devanagari and English with NFKC, maps sections, and extracts structured fields."* | **Core Solution Strength (24 pts)** |
+| **0:40 – 1:10** | **Live Action:** Drop PDF into BidSahayak console | *"Watch the agent work. In under a minute, it normalizes Devanagari and English with NFKC, maps sections, and extracts structured fields."* | **Core Solution Strength (24 pts)** |
 | **1:10 – 1:35** | Click source snippet citation link | *"Notice the trust layer: every field links directly to its source page and verbatim snippet. If a snippet isn't on the page, the agent refuses to guess and flags it for human review."* | **Technical Depth & Anti-Hallucination (24 pts)** |
 | **1:35 – 2:00** | Verdict Card + GFR 170 Exemption | *"Against our vendor profile, the pure deterministic rules engine delivers the verdict: Eligible with Gaps. The contractor discovers they are 100% exempt from EMD under GFR Rule 170."* | **Technical Depth & GFR Rules Engine (24 pts)** |
 | **2:00 – 2:15** | **Human Override:** Edit a field | *"The human remains the operator. An officer overrides a turnover clause from an addendum; the engine recomputes instantly and logs the change to the audit trace."* | **Responsible Design & Human-in-the-Loop (10 pts)** |
