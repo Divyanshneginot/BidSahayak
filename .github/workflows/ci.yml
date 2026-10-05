@@ -6,14 +6,17 @@ on:
   pull_request:
     branches: [ master, main ]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
     
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@39cd14742427a8b4175dde4349d328e629f823c7  # v5.1.1
       with:
         python-version: '3.12'
         cache: 'pip'
@@ -35,3 +38,20 @@ jobs:
         PYTHONPATH: .
       run: |
         python evals/run_evals.py
+
+    - name: Security Scan (pip-audit)
+      run: |
+        pip install pip-audit
+        pip-audit
+      continue-on-error: true
+
+    - name: Security Scan (bandit)
+      run: |
+        pip install bandit
+        bandit -r src
+      continue-on-error: true
+
+    - name: Secret Scan
+      run: |
+        python scripts/gate.py --gate G22
+      continue-on-error: true
