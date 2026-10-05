@@ -42,16 +42,13 @@ jobs:
     - name: Security Scan (pip-audit)
       run: |
         pip install pip-audit
-        pip-audit
-      continue-on-error: true
+        pip-audit -r requirements.txt
 
     - name: Security Scan (bandit)
       run: |
         pip install bandit
         bandit -r src
-      continue-on-error: true
 
     - name: Secret Scan
       run: |
         python scripts/gate.py --gate G22
-      continue-on-error: true
