@@ -190,32 +190,32 @@ def override_requirement_field(payload: dict):
     profile_data = payload.get("profile", {})
     override_field = payload.get("field_name")
     new_value = payload.get("new_value")
-    operator_note = payload.get("operator_note", "Human override via UI")
+    operator_note = payload.get("operator_note") or payload.get("override_note") or "Human approval via UI"
 
-    if not override_field:
-        raise HTTPException(status_code=400, detail="Missing field_name to override")
+    if new_value is not None:
+        if override_field in matrix_data:
+            matrix_data[override_field] = new_value
 
-    # Apply override
-    if override_field in matrix_data:
-        matrix_data[override_field] = new_value
-
-    evidence_fields = matrix_data.get("evidence_fields", {})
-    if override_field in evidence_fields:
-        evidence_fields[override_field]["value_normalised"] = new_value
-        evidence_fields[override_field]["confidence"] = 1.0  # Operator certified
-        evidence_fields[override_field]["ambiguity"] = f"Overridden by operator: {operator_note}"
+        evidence_fields = matrix_data.get("evidence_fields", {})
+        if override_field in evidence_fields:
+            evidence_fields[override_field]["value_normalised"] = new_value
+            evidence_fields[override_field]["confidence"] = 1.0  # Operator certified
+            evidence_fields[override_field]["ambiguity"] = f"Overridden by operator: {operator_note}"
+        else:
+            evidence_fields[override_field] = {
+                "field_name": override_field,
+                "value_raw": str(new_value),
+                "value_normalised": new_value,
+                "confidence": 1.0,
+                "source_page": 1,
+                "source_snippet": f"Operator manual input: {new_value}",
+                "ambiguity": operator_note,
+            }
+        matrix_data["evidence_fields"] = evidence_fields
+        action_name = "human_override"
     else:
-        evidence_fields[override_field] = {
-            "field_name": override_field,
-            "value_raw": str(new_value),
-            "value_normalised": new_value,
-            "confidence": 1.0,
-            "source_page": 1,
-            "source_snippet": f"Operator manual input: {new_value}",
-            "ambiguity": operator_note,
-        }
+        action_name = "human_approval"
 
-    matrix_data["evidence_fields"] = evidence_fields
     matrix_data["unresolved_fields"] = [
         f for f in matrix_data.get("unresolved_fields", []) if f != override_field
     ]
@@ -224,7 +224,7 @@ def override_requirement_field(payload: dict):
 
     verdict = evaluate(matrix, profile)
     verdict.audit_log.append({
-        "action": "human_override",
+        "action": action_name,
         "field": override_field,
         "new_value": new_value,
         "note": operator_note,

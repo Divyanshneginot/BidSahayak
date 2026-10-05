@@ -99,6 +99,45 @@ def test_override_clears_unresolved_field():
             assert "min_turnover" not in section.get("details", "")
 
 
+def test_approve_records_audit_without_mutating_or_fabricating_evidence():
+    matrix = {
+        "tender_id": "TND-APPROVE-01",
+        "title": "Solar Installation",
+        "issuing_department": "UPNEDA",
+        "emd_amount": 10000,
+        "evidence_fields": {
+            "emd_amount": {
+                "field_name": "emd_amount",
+                "value_raw": "₹10,000",
+                "value_normalised": 10000,
+                "confidence": 0.95,
+                "source_page": 2,
+                "source_snippet": "EMD is ₹10,000",
+            }
+        },
+    }
+    profile = {
+        "business_name": "Agrawal Electricals",
+        "udyam_classification": "Micro",
+        "annual_turnover_last_3y": [1200000],
+    }
+    approve_payload = {
+        "matrix": matrix,
+        "profile": profile,
+        "field_name": "Earnest Money Deposit (EMD)",
+        "operator_note": "Approved by human operator",
+    }
+    res = client.post("/api/assess/override", json=approve_payload)
+    assert res.status_code == 200
+    data = res.json()
+    # Check audit log entry has human_approval
+    assert any(a["action"] == "human_approval" and a["field"] == "Earnest Money Deposit (EMD)" for a in data["audit_log"])
+    # Matrix evidence should not contain junk key or fabricated "Operator manual input: None"
+    assert "Earnest Money Deposit (EMD)" not in matrix.get("evidence_fields", {})
+    for ev in matrix.get("evidence_fields", {}).values():
+        assert "Operator manual input: None" not in ev.get("source_snippet", "")
+
+
 def test_upload_and_process_file():
     pdf_path = os.path.join("sample_tenders", "imd-tender.pdf")
     if os.path.exists(pdf_path):

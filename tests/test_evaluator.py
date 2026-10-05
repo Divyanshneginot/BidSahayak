@@ -247,3 +247,47 @@ def test_minimum_net_worth_checks(base_matrix, eligible_micro_profile):
     assert nw2.status == "gap"
     assert v2.overall == "not-eligible"
 
+
+def test_unknown_similar_work_and_net_worth_not_false_gaps(base_matrix, eligible_micro_profile):
+    """Verify unknown past work / net worth yields status='unknown' and does not flip to not-eligible."""
+    base_matrix.estimated_cost = 10000000
+    base_matrix.similar_work_percent = 50.0  # 50 Lakhs
+    base_matrix.min_net_worth = 2500000      # 25 Lakhs
+
+    # (a) unknown value -> needs input (status="unknown", reason asks for input)
+    eligible_micro_profile.past_work_max_value = None
+    eligible_micro_profile.net_worth = None
+    v = evaluate(base_matrix, eligible_micro_profile)
+
+    sw = next(v_req for v_req in v.verdicts if v_req.requirement == "Similar Work Experience")
+    nw = next(v_req for v_req in v.verdicts if v_req.requirement == "Minimum Net Worth")
+    assert sw.status == "unknown"
+    assert "Enter your value" in sw.reason
+    assert nw.status == "unknown"
+    assert "Enter your value" in nw.reason
+
+    # (d) overall verdict not "not-eligible" solely due to unknown inputs
+    assert v.overall != "not-eligible"
+    assert v.overall == "needs-human-review"
+    assert not any(g.requirement in ["Similar Work Experience", "Minimum Net Worth"] for g in v.gaps)
+
+    # (b) value below requirement -> gap
+    eligible_micro_profile.past_work_max_value = 1000000
+    eligible_micro_profile.net_worth = 1000000
+    v_gap = evaluate(base_matrix, eligible_micro_profile)
+    sw_gap = next(v_req for v_req in v_gap.verdicts if v_req.requirement == "Similar Work Experience")
+    nw_gap = next(v_req for v_req in v_gap.verdicts if v_req.requirement == "Minimum Net Worth")
+    assert sw_gap.status == "gap"
+    assert nw_gap.status == "gap"
+    assert v_gap.overall == "not-eligible"
+
+    # (c) value meets -> met
+    eligible_micro_profile.past_work_max_value = 6000000
+    eligible_micro_profile.net_worth = 3000000
+    v_met = evaluate(base_matrix, eligible_micro_profile)
+    sw_met = next(v_req for v_req in v_met.verdicts if v_req.requirement == "Similar Work Experience")
+    nw_met = next(v_req for v_req in v_met.verdicts if v_req.requirement == "Minimum Net Worth")
+    assert sw_met.status == "met"
+    assert nw_met.status == "met"
+    assert v_met.overall == "eligible"
+

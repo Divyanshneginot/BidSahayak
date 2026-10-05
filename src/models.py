@@ -60,7 +60,7 @@ class VendorProfile(BaseModel):
     years_in_business: int = 0
     certifications_held: list[str] = Field(default_factory=list)
     past_work_count: int = 0
-    past_work_max_value: int = 0
+    past_work_max_value: Optional[int] = None
     net_worth: Optional[int] = None
     holds_class3_dsc: bool = True
     startup_india: bool = False

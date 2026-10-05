@@ -279,7 +279,15 @@ def evaluate(
         if getattr(matrix, "similar_work_percent", None) and getattr(matrix, "estimated_cost", None):
             ev_desc += f" ({matrix.similar_work_percent}% of estimated cost ₹{matrix.estimated_cost:,})"
 
-        if profile.past_work_max_value >= required_similar_work:
+        if getattr(profile, "past_work_max_value", None) is None:
+            verdicts.append(RequirementVerdict(
+                requirement=req_name,
+                status="unknown",
+                reason="Enter your value to check this requirement.",
+                evidence=ev_desc,
+                remedy="Provide largest single completed similar work in vendor profile to evaluate this requirement.",
+            ))
+        elif profile.past_work_max_value >= required_similar_work:
             verdicts.append(RequirementVerdict(
                 requirement=req_name,
                 status="met",
@@ -301,7 +309,15 @@ def evaluate(
     if getattr(matrix, "min_net_worth", None) and matrix.min_net_worth > 0:
         req_name = "Minimum Net Worth"
         ev_desc = f"₹{matrix.min_net_worth:,}"
-        if getattr(profile, "net_worth", None) is not None and profile.net_worth >= matrix.min_net_worth:
+        if getattr(profile, "net_worth", None) is None:
+            verdicts.append(RequirementVerdict(
+                requirement=req_name,
+                status="unknown",
+                reason="Enter your value to check this requirement.",
+                evidence=ev_desc,
+                remedy="Provide net worth in vendor profile to evaluate this requirement.",
+            ))
+        elif profile.net_worth >= matrix.min_net_worth:
             verdicts.append(RequirementVerdict(
                 requirement=req_name,
                 status="met",
@@ -309,11 +325,10 @@ def evaluate(
                 evidence=ev_desc,
             ))
         else:
-            nw_str = f"₹{profile.net_worth:,}" if getattr(profile, "net_worth", None) is not None else "Not provided"
             v = RequirementVerdict(
                 requirement=req_name,
                 status="gap",
-                reason=f"Vendor net worth ({nw_str}) is below mandatory ₹{matrix.min_net_worth:,}.",
+                reason=f"Vendor net worth (₹{profile.net_worth:,}) is below mandatory ₹{matrix.min_net_worth:,}.",
                 evidence=ev_desc,
                 remedy="Submit Chartered Accountant Net Worth Certificate or strengthen audited balance sheet.",
             )
@@ -413,6 +428,8 @@ def evaluate(
             addressable_gaps.append(g)
 
 
+    has_unknown_requirements = any(v.status == "unknown" for v in verdicts)
+
     if is_empty_matrix:
         overall = "needs-human-review"
         summary = "Tender matrix contains no extracted requirements. Operator review required before assessment."
@@ -432,6 +449,9 @@ def evaluate(
             if participation_impossible
             else f"Vendor does not meet mandatory criteria ({len(blocking_gaps)} blocking gap(s) identified)."
         )
+    elif has_unknown_requirements:
+        overall = "needs-human-review"
+        summary = "Vendor input required for eligibility requirements. Enter your values to determine final eligibility."
     elif len(addressable_gaps) == 0:
         overall = "eligible"
         summary = "Vendor meets all evaluated eligibility criteria. Ready for bid preparation."
