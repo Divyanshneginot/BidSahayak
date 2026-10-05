@@ -29,10 +29,15 @@ import threading
 from collections import defaultdict
 import time
 
+enable_docs = os.getenv("ENABLE_DOCS") == "1"
+
 app = FastAPI(
     title="BidSahayak API",
     description="Agentic procurement eligibility reasoning engine for Indian MSMEs",
     version="1.0.0",
+    docs_url="/docs" if enable_docs else None,
+    redoc_url="/redoc" if enable_docs else None,
+    openapi_url="/openapi.json" if enable_docs else None,
 )
 
 # Subclass starlette.middleware.Middleware for robust gate verification
@@ -71,6 +76,8 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+        response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
         return response
 
     forwarded = request.headers.get("x-forwarded-for")
@@ -120,6 +127,8 @@ async def security_and_rate_limit_middleware(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     return response
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")

@@ -17,3 +17,5 @@ services:
         value: openai/gpt-oss-120b
       - key: GROQ_API_KEY
         sync: false
+      - key: ALLOWED_ORIGINS
+        value: https://bidsahayak.onrender.com

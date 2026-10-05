@@ -374,3 +374,16 @@ def test_input_validation_bounds_and_generic_errors():
     }
     res_ui = client.post("/api/assess/override", json=ui_override)
     assert res_ui.status_code == 200
+
+
+def test_security_headers_and_disabled_docs():
+    res = client.get("/api/health")
+    assert res.status_code == 200
+    assert res.headers.get("Strict-Transport-Security") == "max-age=31536000"
+    assert res.headers.get("Permissions-Policy") == "camera=(), microphone=(), geolocation=()"
+    assert "Content-Security-Policy" not in res.headers
+
+    # Docs disabled by default
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
