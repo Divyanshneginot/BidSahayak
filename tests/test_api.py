@@ -323,3 +323,54 @@ def test_llm_hourly_cap_triggers_deterministic_fallback(monkeypatch):
     matrix = agent.extract(ext_res)
     assert agent.last_tier == 3
     assert any("cap" in str(a) for a in agent.audit_trace)
+
+
+def test_input_validation_bounds_and_generic_errors():
+    valid_matrix = {
+        "tender_id": "TEST-VAL-01",
+        "title": "Road Repair",
+        "emd_amount": 50000,
+    }
+    valid_profile = {
+        "business_name": "Agrawal Electricals",
+        "annual_turnover_last_3y": [1000000],
+    }
+
+    # 1. Negative money rejected with 422 "Invalid input"
+    bad_matrix_negative = dict(valid_matrix, emd_amount=-100)
+    res = client.post("/api/assess/evaluate", json={"matrix": bad_matrix_negative, "profile": valid_profile})
+    assert res.status_code == 422
+    assert res.json()["detail"] == "Invalid input"
+
+    # 2. Money > 10**13 rejected with 422 "Invalid input"
+    bad_matrix_huge = dict(valid_matrix, emd_amount=10**14)
+    res = client.post("/api/assess/evaluate", json={"matrix": bad_matrix_huge, "profile": valid_profile})
+    assert res.status_code == 422
+    assert res.json()["detail"] == "Invalid input"
+
+    # 3. Years > 100 rejected with 422 "Invalid input"
+    bad_matrix_years = dict(valid_matrix, min_years_experience=150)
+    res = client.post("/api/assess/evaluate", json={"matrix": bad_matrix_years, "profile": valid_profile})
+    assert res.status_code == 422
+    assert res.json()["detail"] == "Invalid input"
+
+    # 4. Out of bounds in override rejected with 422 "Invalid input"
+    bad_override = {
+        "matrix": valid_matrix,
+        "profile": valid_profile,
+        "field_name": "emd_amount",
+        "new_value": -500,
+    }
+    res = client.post("/api/assess/override", json=bad_override)
+    assert res.status_code == 422
+    assert res.json()["detail"] == "Invalid input"
+
+    # 5. UI payload format (display label, override_note, no new_value) succeeds
+    ui_override = {
+        "matrix": valid_matrix,
+        "profile": valid_profile,
+        "field_name": "Earnest Money Deposit (EMD)",
+        "override_note": "Operator checked offline bank guarantee",
+    }
+    res_ui = client.post("/api/assess/override", json=ui_override)
+    assert res_ui.status_code == 200

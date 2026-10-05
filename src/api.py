@@ -6,7 +6,8 @@ import os
 import shutil
 import uuid
 import re
-from typing import Optional
+from typing import Optional, Any
+from pydantic import BaseModel, Field
 
 from src.models import (
     RequirementMatrix,
@@ -299,74 +300,147 @@ async def process_full_tender(request: Request, file: UploadFile = File(...)):
     return await _run_guarded(_execute)
 
 
+class EvaluateRequest(BaseModel):
+    matrix: dict[str, Any]
+    profile: dict[str, Any]
+
+
+class OverrideRequest(BaseModel):
+    matrix: dict[str, Any]
+    profile: dict[str, Any]
+    field_name: str
+    new_value: Optional[Any] = None
+    operator_note: Optional[str] = None
+    override_note: Optional[str] = None
+
+
+MONEY_FIELDS = {
+    "emd_amount",
+    "min_turnover",
+    "estimated_cost",
+    "similar_work_min_value",
+    "min_net_worth",
+    "past_work_max_value",
+    "net_worth",
+}
+YEAR_FIELDS = {
+    "turnover_window_years",
+    "min_years_experience",
+    "years_in_business",
+}
+
+
+def _validate_bounds(matrix_data: dict, profile_data: dict):
+    if not isinstance(matrix_data, dict) or not isinstance(profile_data, dict):
+        raise ValueError("Invalid format")
+
+    for k, v in matrix_data.items():
+        if v is not None and isinstance(v, (int, float)):
+            if k in MONEY_FIELDS and (v < 0 or v > 10**13):
+                raise ValueError("Money value out of bounds [0, 10^13]")
+            if k in YEAR_FIELDS and (v < 0 or v > 100):
+                raise ValueError("Year value out of bounds [0, 100]")
+
+    for k, v in profile_data.items():
+        if v is not None and isinstance(v, (int, float)):
+            if k in MONEY_FIELDS and (v < 0 or v > 10**13):
+                raise ValueError("Money value out of bounds [0, 10^13]")
+            if k in YEAR_FIELDS and (v < 0 or v > 100):
+                raise ValueError("Year value out of bounds [0, 100]")
+
+    for to in profile_data.get("annual_turnover_last_3y", []) or []:
+        if isinstance(to, (int, float)) and (to < 0 or to > 10**13):
+            raise ValueError("Turnover value out of bounds [0, 10^13]")
+
+
 @app.post("/api/assess/evaluate", response_model=BidVerdict)
-def run_evaluation(payload: dict):
+def run_evaluation(payload: EvaluateRequest):
     """
     W5: Pure deterministic comparison of RequirementMatrix against VendorProfile.
     """
     try:
-        matrix_data = payload.get("matrix", {})
-        profile_data = payload.get("profile", {})
-        
+        matrix_data = payload.matrix
+        profile_data = payload.profile
+
+        _validate_bounds(matrix_data, profile_data)
+
         matrix = RequirementMatrix(**matrix_data)
         profile = VendorProfile(**profile_data)
-        
+
         verdict = evaluate(matrix, profile)
         return verdict
-    except Exception as e:
-        raise HTTPException(status_code=422, detail=f"Evaluation validation error: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid input")
 
 
 @app.post("/api/assess/override", response_model=BidVerdict)
-def override_requirement_field(payload: dict):
+def override_requirement_field(payload: OverrideRequest):
     """
     Human Gate G2: Human operator overrides an extracted field.
     Re-runs deterministic evaluation immediately with audit logging.
     """
-    matrix_data = payload.get("matrix", {})
-    profile_data = payload.get("profile", {})
-    override_field = payload.get("field_name")
-    new_value = payload.get("new_value")
-    operator_note = payload.get("operator_note") or payload.get("override_note") or "Human approval via UI"
+    try:
+        matrix_data = dict(payload.matrix)
+        profile_data = dict(payload.profile)
+        override_field = payload.field_name
+        new_value = payload.new_value
+        operator_note = payload.operator_note or payload.override_note or "Human approval via UI"
 
-    if new_value is not None:
-        if override_field in matrix_data:
-            matrix_data[override_field] = new_value
+        if new_value is not None:
+            field_lower = override_field.lower()
+            if any(w in field_lower for w in ["emd", "turnover", "cost", "worth", "value", "amount"]) or override_field in MONEY_FIELDS:
+                if isinstance(new_value, (int, float)) and (new_value < 0 or new_value > 10**13):
+                    raise ValueError("Money value out of bounds")
+            if any(w in field_lower for w in ["year", "experience", "window"]) or override_field in YEAR_FIELDS:
+                if isinstance(new_value, (int, float)) and (new_value < 0 or new_value > 100):
+                    raise ValueError("Year value out of bounds")
 
-        evidence_fields = matrix_data.get("evidence_fields", {})
-        if override_field in evidence_fields:
-            evidence_fields[override_field]["value_normalised"] = new_value
-            evidence_fields[override_field]["confidence"] = 1.0  # Operator certified
-            evidence_fields[override_field]["ambiguity"] = f"Overridden by operator: {operator_note}"
+        _validate_bounds(matrix_data, profile_data)
+
+        if new_value is not None:
+            if override_field in matrix_data:
+                matrix_data[override_field] = new_value
+
+            evidence_fields = matrix_data.get("evidence_fields", {})
+            if override_field in evidence_fields:
+                evidence_fields[override_field]["value_normalised"] = new_value
+                evidence_fields[override_field]["confidence"] = 1.0  # Operator certified
+                evidence_fields[override_field]["ambiguity"] = f"Overridden by operator: {operator_note}"
+            else:
+                evidence_fields[override_field] = {
+                    "field_name": override_field,
+                    "value_raw": str(new_value),
+                    "value_normalised": new_value,
+                    "confidence": 1.0,
+                    "source_page": 1,
+                    "source_snippet": f"Operator manual input: {new_value}",
+                    "ambiguity": operator_note,
+                }
+            matrix_data["evidence_fields"] = evidence_fields
+            action_name = "human_override"
         else:
-            evidence_fields[override_field] = {
-                "field_name": override_field,
-                "value_raw": str(new_value),
-                "value_normalised": new_value,
-                "confidence": 1.0,
-                "source_page": 1,
-                "source_snippet": f"Operator manual input: {new_value}",
-                "ambiguity": operator_note,
-            }
-        matrix_data["evidence_fields"] = evidence_fields
-        action_name = "human_override"
-    else:
-        action_name = "human_approval"
+            action_name = "human_approval"
 
-    matrix_data["unresolved_fields"] = [
-        f for f in matrix_data.get("unresolved_fields", []) if f != override_field
-    ]
-    matrix = RequirementMatrix(**matrix_data)
-    profile = VendorProfile(**profile_data)
+        matrix_data["unresolved_fields"] = [
+            f for f in matrix_data.get("unresolved_fields", []) if f != override_field
+        ]
+        matrix = RequirementMatrix(**matrix_data)
+        profile = VendorProfile(**profile_data)
 
-    verdict = evaluate(matrix, profile)
-    verdict.audit_log.append({
-        "action": action_name,
-        "field": override_field,
-        "new_value": new_value,
-        "note": operator_note,
-    })
-    return verdict
+        verdict = evaluate(matrix, profile)
+        verdict.audit_log.append({
+            "action": action_name,
+            "field": override_field,
+            "new_value": new_value,
+            "note": operator_note,
+        })
+        return verdict
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=422, detail="Invalid input")
 
 
 @app.get("/")
