@@ -38,7 +38,7 @@ All code in this repository was written and committed inside the official hackat
 4. **Deterministic Regex Fallback (`src/regex_fallback.py`)**: Offline regex parser handling Indian currency denominations (paise, lakh, crore).
 5. **Deterministic Evaluator (`src/evaluator.py`)**: GFR eligibility engine validating EMD exemptions, turnover averaging across 3 years, past work %, net worth, and IST-aware Class-3 DSC timing.
 6. **Web API & Human Console (`src/api.py`, `frontend/index.html`)**: FastAPI backend with operator approve/override endpoints, unresolved field cleanup, audit trace, and bilingual EN/HI toggle.
-7. **Testing & Benchmark Batteries**: 38 automated pytest tests, 14-tender synthetic benchmark, real Groq LLM benchmark, and 10-tender real public tender held-out benchmark.
+7. **Testing & Benchmark Batteries**: 40 automated pytest tests, 14-tender synthetic benchmark, real Groq LLM benchmark, and 10-tender real public tender held-out benchmark.
 
 ---
 

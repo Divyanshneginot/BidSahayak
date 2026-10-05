@@ -38,12 +38,12 @@ If it isn't in that chain, it doesn't exist.
 1. **The Evaluator is deterministic.** Same inputs → same verdict, always. An LLM deciding eligibility is a bug factory.
 2. **No snippet → not shown as fact.** Every extracted field must cite a verifiable source page and snippet. If it can't, it's flagged `needs-human-review`.
 3. **"Never confidently wrong" over "always answers."** The system prefers `needs-human-review` over guessing. `CONFIDENCE_THRESHOLD` is read from env (default 0.70).
-4. **Human in the loop.** Operator can approve/override any field via the UI; overriding clears the field from `unresolved_fields` and instantly recomputes the verdict.
+4. **Human in the loop.** Operator can approve fields via the UI (or override values via API); updates clear the field from `unresolved_fields` and recompute the verdict.
 5. **There is no code path that submits a bid.** Not to CPPP, not to GeM, not anywhere.
 
 ### How the Human Stays in Control
 
-- **Per-field approve/override** — every extracted requirement shows value, confidence, and source snippet. Disagree → type correction → verdict recomputes.
+- **Per-field approval & API override** — every extracted requirement shows value, confidence, and source snippet. Operators approve fields in the UI, or submit typed corrections via `/api/assess/override` to recompute the verdict.
 - **Confidence gating** — fields below threshold render amber and are excluded from the verdict until confirmed.
 - **Audit log** — every agent step (initial call, repair attempts, fallback, human overrides) logged to audit trace.
 - **No auto-submit, hard-coded.** There is no API client for CPPP or GeM submission in this codebase.
@@ -61,13 +61,13 @@ cp .env.example .env
 # 3. Run the server
 python -m uvicorn src.api:app --reload
 
-# 4. Run tests (38 tests)
+# 4. Run tests (40 tests)
 pytest tests/ -v
 ```
 
 ## Live URL
 
-> *Will be added at deployment (hour 20–24)*
+https://bidsahayak.onrender.com/
 
 ## Benchmark Results
 
@@ -78,22 +78,24 @@ Ground truth lives in `assets/ground_truth.json` and is read from the documents,
 | Field | Correct | Of | Accuracy | Threshold |
 |---|---|---|---|---|
 | EMD amount | 13 | 13 | **100%** | ≥ 90% |
-| Submission deadline | 13 | 14 | **93%** | ≥ 80% |
+| Submission deadline | 14 | 14 | **100%** | ≥ 80% |
 | Minimum turnover | 14 | 14 | **100%** | ≥ 70% |
 | MSE exemption stated | 14 | 14 | **100%** | ≥ 90% |
 
-*Latency:* p50 33 ms · p95 85 ms (deterministic tier, single machine, no API key).
+*Latency:* p50 25 ms · p95 59 ms (deterministic tier, single machine, no API key).
 
 ### 2. Real LLM-Tier Benchmark Run (`docs/BENCHMARK-llm.md`)
 Run with active LLM API key: `python scripts/benchmark.py --repo . --md docs/BENCHMARK-llm.md`.
 - **Tier 1 (Agentic LLM Extraction)** ran on all 14 documents with zero fallbacks to Tier 3.
-- Accuracy: EMD 85%, Deadline 79%, Turnover 86%, Exemption 93% (p50: 25.8s per tender).
+- Accuracy: EMD 85% (misses 90% threshold), Deadline 79% (misses 80% threshold), Turnover 86% (meets 70%), Exemption 93% (meets 90%) (p50: 25.8s per tender).
+- The LLM tier misses two of its own accuracy thresholds (EMD and deadline) and was evaluated only on the 14 synthetic/seed documents; it was not run on the 10 long real public tenders.
 
 ### 3. Held-Out Benchmark from 10 Real Public Tenders (`docs/BENCHMARK-heldout.md`)
 Run against 10 real public tenders (64–107 pages each, from IIT Kanpur / CPPP) with zero regex tuning:
 `python scripts/benchmark.py --repo . --gt assets/ground_truth_held_out.json --no-llm --md docs/BENCHMARK-heldout.md`
 - Results: EMD 10/10 (100%), Deadline 9/10 (90%), Turnover 10/10 (100%), Exemption 10/10 (100%).
 - 1 honest miss on `Contractdocument66.pdf` (got '2026-10-08', want None).
+- Note: Evaluated on Tier 3 (deterministic); LLM tier was not evaluated on these 10 long tenders. Tender source details are documented in `docs/SOURCES.md`.
 
 ### Known Failure Modes & Limitations
 1. **Unreadable text layers.** A page whose text layer is tofu/near-empty is reported in `skipped_pages`, excluded from analysis, and surfaced in the UI — never guessed at.
@@ -104,11 +106,12 @@ Run against 10 real public tenders (64–107 pages each, from IIT Kanpur / CPPP)
 
 ## Honest Limits
 
-- Sample size: 1 real seed tender + 13 representative fixtures
-- Audit data sources: CAG reports 2017–2026
-- Verdicts not validated against a real procurement decision
-- Rules encode GFR 2017 + PPP for MSEs 2012 as published; a tender may lawfully deviate
-- Advisory only — verify against the original tender document before bidding
+- Sample size: Core fixture suite consists of 1 real seed tender + 13 representative synthetic fixtures (14 total); held-out evaluation tested on 10 real public tenders (64–107 pages each, IIT Kanpur / CPPP).
+- LLM tier limits: Misses two of its own accuracy thresholds (EMD 85% vs 90%, deadline 79% vs 80%) and was not evaluated on the 10 long real tenders.
+- Audit data sources: CAG reports 2017–2026.
+- Verdicts not validated against a real procurement decision.
+- Rules encode GFR 2017 + PPP for MSEs 2012 as published; a tender may lawfully deviate.
+- Advisory only — verify against the original tender document before bidding.
 
 ## AI Tools Used
 

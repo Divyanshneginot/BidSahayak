@@ -1,25 +1,37 @@
-# BidSahayak Benchmark — Tier 3 (Deterministic Regex Fallback)
+# Extraction benchmark
 
-- **Evaluated**: 14 documents
-- **EMD Recovery**: 13/14 (92.9%)
-- **Deadline Accuracy**: 12/14 (85.7%)
-- **Turnover Accuracy**: 1/14 (7.1%)
-- **Exemption Detection**: 9/14 (64.3%)
-- **Latency**: p50 = 43.9 ms · p95 = 733.5 ms
+Generated `2026-10-05 17:17:41+0530` from commit `b26d2ef` · tier: **deterministic (no API key)** · 14 documents.
 
-| Document | EMD OK | Deadline OK | Turnover OK | Exemption OK | Time (s) |
-|---|---|---|---|---|---|
-| `aiims_ppe_supply.pdf` | ✗ | ✓ | ✗ | ✓ | 0.05s |
-| `bccl_coal_handling.pdf` | ✓ | ✓ | ✗ | ✓ | 0.05s |
-| `cpwd_facility_management.pdf` | ✓ | ✓ | ✗ | ✗ | 0.04s |
-| `imd-tender.pdf` | ✓ | ✓ | ✓ | ✓ | 0.73s |
-| `karnataka_jjm_water.pdf` | ✓ | ✓ | ✗ | ✓ | 0.04s |
-| `mtd_goods_nic.pdf` | ✓ | ✓ | ✗ | ✓ | 0.04s |
-| `nhai_highway_toll.pdf` | ✓ | ✗ | ✗ | ✗ | 0.09s |
-| `nicsi_cloud_maintenance.pdf` | ✓ | ✓ | ✗ | ✗ | 0.04s |
-| `scanned_police_housing.pdf` | ✓ | ✓ | ✗ | ✗ | 0.04s |
-| `smart_classroom_displays.pdf` | ✓ | ✓ | ✗ | ✓ | 0.04s |
-| `tn_highways_short_deadline.pdf` | ✓ | ✓ | ✗ | ✓ | 0.03s |
-| `up_jal_nigam_hindi.pdf` | ✓ | ✗ | ✗ | ✗ | 0.05s |
-| `up_pwd_road_works.pdf` | ✓ | ✓ | ✗ | ✓ | 0.04s |
-| `upneda_solar_lights.pdf` | ✓ | ✓ | ✗ | ✓ | 0.04s |
+Ground truth: `assets/ground_truth.json` — read from the documents, never from the pipeline.
+
+| Field | Correct | Of | Accuracy | Threshold |
+|---|---|---|---|---|
+| emd | 13 | 13 | 100% | 90% |
+| deadline | 14 | 14 | 100% | 80% |
+| turnover | 14 | 14 | 100% | 70% |
+| exemption | 14 | 14 | 100% | 90% |
+
+Latency: p50 25 ms · p95 59 ms (single machine, deterministic (no API key) tier).
+
+## Document Results
+
+| Document | Tier | EMD | Deadline | Turnover | Exemption | Time (s) |
+|---|---|---|---|---|---|---|
+| `imd-tender.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 1.28s |
+| `mtd_goods_nic.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.03s |
+| `up_pwd_road_works.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.02s |
+| `karnataka_jjm_water.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.02s |
+| `bccl_coal_handling.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.03s |
+| `upneda_solar_lights.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.02s |
+| `aiims_ppe_supply.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.02s |
+| `smart_classroom_displays.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.02s |
+| `cpwd_facility_management.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.03s |
+| `nicsi_cloud_maintenance.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.03s |
+| `up_jal_nigam_hindi.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.03s |
+| `scanned_police_housing.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.01s |
+| `nhai_highway_toll.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.06s |
+| `tn_highways_short_deadline.pdf` | Tier 3 | ✓ | ✓ | ✓ | ✓ | 0.02s |
+
+## Misses
+
+None — all compared fields matched ground truth on this run.
