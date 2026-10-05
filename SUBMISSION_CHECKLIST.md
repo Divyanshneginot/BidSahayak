@@ -19,7 +19,7 @@
 - [x] **Rule 04 Disclosure**: `PRIOR_WORK.md` disclosing pre-event domain knowledge with zero prior code reuse.
 - [x] **Security Sweep**: Zero credentials or API keys in Git history.
 - [ ] **Live Deployed URL**: [Deploy to Render / Railway using `render.yaml` or `Dockerfile`]
-- [ ] **2:30 Demo Video**: [Record following script below and upload to YouTube/Loom]
+- [x] **Demo Video**: [BidSahayak YouTube Demo](https://youtu.be/7W3jbwHY0yM)
 
 ---
 

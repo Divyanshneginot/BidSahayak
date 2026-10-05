@@ -15,7 +15,8 @@ If it isn't in that chain, it doesn't exist.
 
 ## Track
 
-**01 — Agentic AI** · WCC Launchpad 30 · 4–5 Oct 2026
+**01 — Agentic AI** · WCC Launchpad 30 · 4–5 Oct 2026  
+**Demo Video:** [BidSahayak YouTube Demo](https://youtu.be/7W3jbwHY0yM)
 
 ## Architecture
 
