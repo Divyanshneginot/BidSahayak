@@ -43,6 +43,67 @@ def _scrub(s: Any) -> str:
     return text
 
 
+def _neutralise_document_tags(text: str) -> str:
+    """
+    Neutralises <document> and </document> tags (case-insensitive, with whitespace
+    and entity variants) preventing prompt injection breakout.
+    """
+    if not text:
+        return ""
+    pattern = r"(?i)(?:<|&lt;|&#0*60;|&#x0*3c;)\s*/?\s*d\s*o\s*c\s*u\s*m\s*e\s*n\s*t(?:\s+[^>&]*?)?\s*(?:>|&gt;|&#0*62;|&#x0*3e;)"
+    return re.sub(pattern, "[document-tag-neutralised]", text)
+
+
+INJECTION_KEYWORDS = [
+    "ignore previous instructions",
+    "system prompt",
+    "set emd",
+]
+
+
+def _check_and_route_injections(matrix: RequirementMatrix, text: str, audit_trace: list) -> RequirementMatrix:
+    """
+    Scans tender text for adversarial instruction phrases.
+    Adds an audit trace warning and routes affected fields to needs-human-review.
+    """
+    text_lower = text.lower()
+    matched = [phrase for phrase in INJECTION_KEYWORDS if phrase in text_lower]
+    if not matched:
+        return matrix
+
+    audit_trace.append({
+        "step": "prompt_injection_warning",
+        "warning": f"Potential prompt injection detected: {', '.join(matched)}",
+        "detected_phrases": matched,
+    })
+    logger.warning("Potential prompt injection detected: %s. Routing affected fields to needs-human-review.", matched)
+
+    affected = set()
+    if "set emd" in matched:
+        affected.add("emd_amount")
+    if "ignore previous instructions" in matched or "system prompt" in matched:
+        affected.update(["emd_amount", "min_turnover", "submission_deadline"])
+        if matrix.evidence_fields:
+            affected.update(matrix.evidence_fields.keys())
+
+    for field in affected:
+        if field not in matrix.unresolved_fields:
+            matrix.unresolved_fields.append(field)
+        if field in matrix.evidence_fields:
+            matrix.evidence_fields[field].ambiguity = "needs-human-review: prompt injection detected"
+            matrix.evidence_fields[field].confidence = 0.0
+        else:
+            matrix.evidence_fields[field] = FieldEvidence(
+                field_name=field,
+                value_raw="[INJECTION DETECTED]",
+                value_normalised=None,
+                confidence=0.0,
+                source_snippet="Prompt injection attempt detected in source document",
+                ambiguity="needs-human-review: prompt injection detected",
+            )
+    return matrix
+
+
 _DEFAULT = object()
 
 
@@ -206,7 +267,7 @@ class ExtractorAgent:
             })
             matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
             verified_matrix, _ = self._verify_all_evidence(matrix, extraction_result)
-            return verified_matrix
+            return _check_and_route_injections(verified_matrix, extraction_result.full_text, self.audit_trace)
 
         # Check LLM hourly rate cap
         hourly_cap = int(os.getenv("LLM_HOURLY_CAP", "60"))
@@ -224,10 +285,11 @@ class ExtractorAgent:
             })
             matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
             verified_matrix, _ = self._verify_all_evidence(matrix, extraction_result)
-            return verified_matrix
+            return _check_and_route_injections(verified_matrix, extraction_result.full_text, self.audit_trace)
 
         # Real Agent Loop with Self-Repair (Tier 1)
         doc_text = self._retrieve_relevant_sections(extraction_result)
+        doc_text = _neutralise_document_tags(doc_text)
         initial_prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(document_text=doc_text)
         max_retries = 2
         last_error = None
@@ -272,7 +334,7 @@ class ExtractorAgent:
                     })
                     self.last_tier = 1
                     self.fallback_reason = None
-                    return verified_matrix
+                    return _check_and_route_injections(verified_matrix, extraction_result.full_text, self.audit_trace)
                 else:
                     self.audit_trace.append({
                         "step": "citation_verification",
@@ -301,7 +363,7 @@ class ExtractorAgent:
         })
         matrix = DeterministicRegexExtractor.build_matrix(extraction_result)
         verified_matrix, _ = self._verify_all_evidence(matrix, extraction_result)
-        return verified_matrix
+        return _check_and_route_injections(verified_matrix, extraction_result.full_text, self.audit_trace)
 
     def _call_llm(self, prompt_text: str) -> dict:
         import requests
