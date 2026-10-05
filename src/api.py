@@ -90,18 +90,51 @@ def health():
     }
 
 
-def _save_uploaded_pdf(file: UploadFile) -> str:
-    """Securely validates and saves an uploaded PDF file preventing path traversal and corrupt files."""
+def _save_uploaded_pdf(file: UploadFile, content_length: Optional[int] = None) -> str:
+    """Securely validates and saves an uploaded PDF file in 1 MB chunks, capping at 25 MB."""
+    if file.filename is None or not str(file.filename).strip():
+        raise HTTPException(status_code=400, detail="Filename missing or invalid.")
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF documents are supported.")
+
+    # Early rejection if Content-Length > 26 MB
+    cl = content_length
+    if cl is None and hasattr(file, "headers") and file.headers:
+        val = file.headers.get("content-length")
+        if val is not None:
+            try:
+                cl = int(val)
+            except (ValueError, TypeError):
+                pass
+    if cl is not None and cl > 26 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File too large: Content-Length exceeds 26 MB.")
 
     safe_basename = os.path.basename(file.filename)
     safe_name = re.sub(r"[^a-zA-Z0-9_.-]", "_", safe_basename)
     unique_name = f"{uuid.uuid4().hex[:8]}_{safe_name}"
     file_path = os.path.join(UPLOAD_DIR, unique_name)
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    chunk_size = 1024 * 1024  # 1 MB
+    max_bytes = 25 * 1024 * 1024  # 25 MB
+    total_bytes = 0
+
+    try:
+        with open(file_path, "wb") as buffer:
+            while True:
+                chunk = file.file.read(chunk_size)
+                if not chunk:
+                    break
+                total_bytes += len(chunk)
+                if total_bytes > max_bytes:
+                    raise HTTPException(status_code=413, detail="File size exceeds maximum 25 MB limit.")
+                buffer.write(chunk)
+    except Exception:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+            except OSError:
+                pass
+        raise
 
     # Magic byte validation (%PDF-)
     with open(file_path, "rb") as f:
@@ -153,10 +186,15 @@ async def _run_guarded(func):
 
 
 @app.post("/api/assess/upload")
-async def upload_tender_pdf(file: UploadFile = File(...)):
+async def upload_tender_pdf(request: Request, file: UploadFile = File(...)):
     """W1 + W2: Ingest PDF, extract text, detect sections, and return initial metadata."""
+    cl_hdr = request.headers.get("content-length")
+    cl_val = int(cl_hdr) if cl_hdr and cl_hdr.isdigit() else None
+    if cl_val and cl_val > 26 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Content-Length exceeds 26 MB limit.")
+
     def _execute():
-        file_path = _save_uploaded_pdf(file)
+        file_path = _save_uploaded_pdf(file, content_length=cl_val)
         try:
             ingest_result = ingest_worker.process(file_path)
             if not ingest_result.is_valid:
@@ -189,10 +227,15 @@ async def upload_tender_pdf(file: UploadFile = File(...)):
 
 
 @app.post("/api/assess/process")
-async def process_full_tender(file: UploadFile = File(...)):
+async def process_full_tender(request: Request, file: UploadFile = File(...)):
     """Runs Supervisor end-to-end: W1 Ingest -> W2 Text -> W4 Extract -> Trace."""
+    cl_hdr = request.headers.get("content-length")
+    cl_val = int(cl_hdr) if cl_hdr and cl_hdr.isdigit() else None
+    if cl_val and cl_val > 26 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Content-Length exceeds 26 MB limit.")
+
     def _execute():
-        file_path = _save_uploaded_pdf(file)
+        file_path = _save_uploaded_pdf(file, content_length=cl_val)
         try:
             session = supervisor.process_document(file_path)
             return session

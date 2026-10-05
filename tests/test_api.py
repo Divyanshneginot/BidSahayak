@@ -203,3 +203,50 @@ def test_concurrency_lock_and_queue_limit():
         _supervisor_lock.release()
         for t in threads:
             t.join()
+
+
+def test_upload_filename_none_returns_400():
+    from fastapi import UploadFile, HTTPException
+    import io
+    import pytest
+    from src.api import _save_uploaded_pdf
+
+    uf = UploadFile(io.BytesIO(b"%PDF-1.4\n"), filename=None)
+    with pytest.raises(HTTPException) as exc:
+        _save_uploaded_pdf(uf)
+    assert exc.value.status_code == 400
+    assert "Filename missing" in exc.value.detail
+
+
+def test_upload_content_length_exceeds_26mb_rejected_early():
+    res = client.post(
+        "/api/assess/upload",
+        files={"file": ("test.pdf", b"%PDF-1.4\n", "application/pdf")},
+        headers={"content-length": str(27 * 1024 * 1024)},
+    )
+    assert res.status_code == 413
+
+
+def test_upload_streaming_cap_25mb_aborts_and_deletes_partial():
+    from fastapi import UploadFile, HTTPException
+    import pytest
+    from src.api import _save_uploaded_pdf, UPLOAD_DIR
+
+    class HugeChunkReader:
+        def __init__(self, total_size):
+            self.remaining = total_size
+
+        def read(self, size=-1):
+            if self.remaining <= 0:
+                return b""
+            chunk_len = min(size if size > 0 else self.remaining, self.remaining)
+            self.remaining -= chunk_len
+            return b"A" * chunk_len
+
+    uf = UploadFile(HugeChunkReader(26 * 1024 * 1024), filename="huge.pdf")
+    before_files = set(os.listdir(UPLOAD_DIR))
+    with pytest.raises(HTTPException) as exc:
+        _save_uploaded_pdf(uf)
+    assert exc.value.status_code == 413
+    after_files = set(os.listdir(UPLOAD_DIR))
+    assert before_files == after_files
