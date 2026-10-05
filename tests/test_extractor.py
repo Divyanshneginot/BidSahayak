@@ -157,3 +157,41 @@ def test_agent_repair_loop_on_citation_failure():
     assert any(step["step"] == "citation_verification" and step["status"] == "PASS" for step in agent.audit_trace)
     assert matrix.emd_amount == 50000
 
+
+def test_connection_error_redacts_api_key(monkeypatch):
+    """A1: Ensure ConnectionError containing fake key never appears in result or trace."""
+    import json
+    import requests
+    from requests.exceptions import ConnectionError
+    from src.text_extract import PageText, ExtractionResult
+
+    fake_key = "AIza_FAKE_TEST_KEY_123"
+    fake_token = "Bearer " + "gsk_TEST_TOKEN_123"
+    
+    p1_text = "NIT No: PWD/2026/01. Notice Inviting Tender. EMD: Rs. 50,000."
+    er = ExtractionResult(
+        tender_id="TND-ERR-KEY",
+        total_pages=1,
+        pages={1: PageText(page_number=1, raw_text=p1_text, normalized_text=p1_text, char_count=len(p1_text), is_scanned_likely=False)},
+        full_text=p1_text,
+        is_scanned_document=False,
+    )
+
+    agent = ExtractorAgent(api_key=fake_key)
+
+    def mock_post(*args, **kwargs):
+        raise ConnectionError(f"Connection failed at url=https://api.test?key={fake_key} with auth {fake_token}")
+
+    monkeypatch.setattr(requests, "post", mock_post)
+
+    matrix = agent.extract(er)
+    assert matrix is not None
+    assert agent.last_tier == 3
+    assert agent.fallback_reason == "LLM provider unavailable; used deterministic fallback"
+
+    # Verify key never appears in audit trace
+    trace_dump = json.dumps(agent.audit_trace)
+    assert fake_key not in trace_dump
+    assert "gsk_TEST_TOKEN_123" not in trace_dump
+    assert "[REDACTED]" in trace_dump or "[REDACTED_KEY]" in trace_dump
+

@@ -26,6 +26,20 @@ from src.agent.prompts import (
 logger = logging.getLogger(__name__)
 
 
+def _scrub(s: Any) -> str:
+    """
+    Redacts API keys, Bearer tokens, and tokens starting with AIza, gsk_, sk-, or AQ
+    from exception texts, logs, and audit traces.
+    """
+    if s is None:
+        return ""
+    text = str(s)
+    text = re.sub(r"(?i)key=[^\s&\"'<>]+", "key=[REDACTED]", text)
+    text = re.sub(r"(?i)Bearer\s+[A-Za-z0-9_\-\.]+", "Bearer [REDACTED]", text)
+    text = re.sub(r"\b(?:AIza|gsk_|sk-|AQ)[A-Za-z0-9_\-\.]*", "[REDACTED_KEY]", text)
+    return text
+
+
 _DEFAULT = object()
 
 
@@ -248,17 +262,17 @@ class ExtractorAgent:
                     last_error = f"Verification failures on fields: {[f['field'] for f in failures]}"
 
             except Exception as e:
-                logger.warning(f"Agent loop attempt {attempt} encountered error: {e}")
-                last_error = str(e)
+                logger.warning(f"Agent loop attempt {attempt} encountered error: {_scrub(e)}")
+                last_error = _scrub(e)
                 self.audit_trace.append({
                     "step": "llm_call_error",
                     "attempt": attempt,
-                    "error": str(e),
+                    "error": _scrub(e),
                 })
 
-        logger.warning(f"LLM verification unresolved after {max_retries} attempts: {last_error}. Executing Tier 3 fallback.")
+        logger.warning(f"LLM verification unresolved after {max_retries} attempts: {_scrub(last_error)}. Executing Tier 3 fallback.")
         self.last_tier = 3
-        self.fallback_reason = f"LLM tier failed verification: {last_error}"
+        self.fallback_reason = "LLM provider unavailable; used deterministic fallback"
         self.audit_trace.append({
             "step": "fallback_to_regex",
             "tier": 3,
@@ -280,7 +294,11 @@ class ExtractorAgent:
             try:
                 if prov == "gemini":
                     gemini_model = self.model if "gemini" in self.model else "gemini-2.0-flash"
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent?key={key}"
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{gemini_model}:generateContent"
+                    headers = {
+                        "x-goog-api-key": key,
+                        "Content-Type": "application/json",
+                    }
                     payload = {
                         "contents": [{"parts": [{"text": f"{SYSTEM_PROMPT}\n\n{prompt_text}"}]}],
                         "generationConfig": {
@@ -288,13 +306,13 @@ class ExtractorAgent:
                             "temperature": 0.0,
                         },
                     }
-                    res = requests.post(url, json=payload, timeout=20)
+                    res = requests.post(url, json=payload, headers=headers, timeout=20)
                     if res.status_code == 200:
                         raw_json = res.json()["candidates"][0]["content"]["parts"][0]["text"]
                         self.provider = "gemini"
                         self.api_key = key
                     else:
-                        raise RuntimeError(f"Gemini API returned status {res.status_code}: {res.text}")
+                        raise RuntimeError(f"Gemini API returned status {res.status_code}: {_scrub(res.text)}")
                 else:
                     endpoint = "https://api.openai.com/v1/chat/completions"
                     model_name = self.model
@@ -329,7 +347,7 @@ class ExtractorAgent:
                             self.api_key = key
                             break
                         else:
-                            raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {res.text}")
+                            raise RuntimeError(f"LLM API ({endpoint}) returned status {res.status_code}: {_scrub(res.text)}")
                     if raw_json is None:
                         raise RuntimeError(f"LLM API ({endpoint}) rate limited after 3 retries")
 
@@ -340,11 +358,11 @@ class ExtractorAgent:
                 return json.loads(clean_json)
 
             except Exception as e:
-                logger.warning(f"LLM provider '{prov}' attempt failed: {e}. Cascading to next available provider if any.")
+                logger.warning(f"LLM provider '{prov}' attempt failed: {_scrub(e)}. Cascading to next available provider if any.")
                 last_err = e
                 continue
 
-        raise RuntimeError(f"All configured LLM providers failed. Last error: {last_err}")
+        raise RuntimeError(f"All configured LLM providers failed. Last error: {_scrub(last_err)}")
 
     @staticmethod
     def _parse_matrix_dict(data: dict, tender_id: str) -> RequirementMatrix:
